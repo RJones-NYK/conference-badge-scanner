@@ -12,7 +12,9 @@ import SwiftData
 struct conference_badge_scannerApp: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
-            Item.self,
+            Event.self,
+            Attendee.self,
+            Conversation.self
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
@@ -30,3 +32,4 @@ struct conference_badge_scannerApp: App {
         .modelContainer(sharedModelContainer)
     }
 }
+
