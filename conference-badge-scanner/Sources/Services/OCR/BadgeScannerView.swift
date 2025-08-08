@@ -21,6 +21,11 @@ struct BadgeScannerView: UIViewControllerRepresentable {
 
     func updateUIViewController(_ uiViewController: DataScannerViewController, context: Context) {}
 
+    func dismantleUIViewController(_ uiViewController: DataScannerViewController, coordinator: Coordinator) {
+        uiViewController.stopScanning()
+        uiViewController.delegate = nil
+    }
+
     func makeCoordinator() -> Coordinator { Coordinator(onText: onText) }
 
     final class Coordinator: NSObject, DataScannerViewControllerDelegate {

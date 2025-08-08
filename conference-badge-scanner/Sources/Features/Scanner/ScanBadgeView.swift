@@ -12,7 +12,7 @@ struct ScanBadgeView: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             Group {
-                if useDocumentScanner {
+                if useDocumentScanner, VNDocumentCameraViewController.isSupported {
                     DocumentScannerView { image, text in
                         // Prefer document scanner OCR result
                         buffer = text.components(separatedBy: "\n").filter { !$0.isEmpty }
@@ -32,7 +32,11 @@ struct ScanBadgeView: View {
                 } else {
                     VStack(spacing: 12) {
                         Image(systemName: "camera.fill")
+                            .font(.title)
                         Text("Scanner not available on this device.")
+                        Text("If you recently denied access, enable Camera in Settings > Privacy & Security > Camera.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
                         Button("Close") { onCancel(); dismiss() }
                     }
                 }

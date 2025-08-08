@@ -16,6 +16,7 @@ struct EventDetailView: View {
     @State private var website: String = ""
     @State private var location: String = ""
     @State private var confirmDelete = false
+    @State private var showingBadgeConfig = false
 
     var body: some View {
         Form {
@@ -64,6 +65,27 @@ struct EventDetailView: View {
             }
 
             Section {
+                HStack {
+                    Spacer()
+                    Button {
+                        showingBadgeConfig = true
+                    } label: {
+                        VStack(spacing: 6) {
+                            Image(systemName: "person.text.rectangle.fill")
+                                .font(.system(size: 36, weight: .semibold))
+                            Text("Configure Badge")
+                                .font(.headline)
+                        }
+                        .padding(.vertical, 8)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .accessibilityLabel("Configure Badge")
+                    Spacer()
+                }
+            }
+
+            Section {
                 Button(role: .destructive) {
                     confirmDelete = true
                 } label: {
@@ -91,6 +113,9 @@ struct EventDetailView: View {
             }
         }
         .onAppear(perform: loadFromEvent)
+        .sheet(isPresented: $showingBadgeConfig) {
+            BadgeConfigurationView(event: event)
+        }
         .alert("Delete Event?", isPresented: $confirmDelete) {
             Button("Delete", role: .destructive) {
                 context.delete(event)

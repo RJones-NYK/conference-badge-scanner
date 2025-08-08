@@ -9,7 +9,7 @@ import SwiftUI
 import SwiftData
 
 @main
-struct conference_badge_scannerApp: App {
+struct ConferenceBadgeScannerApp: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             Event.self,

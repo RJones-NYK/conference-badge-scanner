@@ -67,6 +67,7 @@ struct ConversationsListView: View {
                     context.insert(convo)
                 } onCancel: {}
                 .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
             } else {
                 Text("No event available")
             }
