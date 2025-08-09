@@ -6,6 +6,7 @@ final class Conversation {
     var createdAt: Date = Date()
     var notes: String = ""
     var followUp: Bool = false
+    var deletedAt: Date? = nil
     var event: Event?
     var attendee: Attendee?
 

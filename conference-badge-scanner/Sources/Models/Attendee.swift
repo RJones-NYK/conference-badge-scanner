@@ -12,6 +12,7 @@ final class Attendee {
     var phone: String?
     var website: String?
     var linkedinURL: String?
+    var attendeeType: String?
     @Relationship(deleteRule: .cascade) var conversations: [Conversation] = []
 
     init(fullName: String? = nil,
@@ -22,7 +23,8 @@ final class Attendee {
          email: String? = nil,
          phone: String? = nil,
          website: String? = nil,
-         linkedinURL: String? = nil) {
+         linkedinURL: String? = nil,
+         attendeeType: String? = nil) {
         self.fullName = fullName
         self.firstName = firstName
         self.lastName = lastName
@@ -32,6 +34,7 @@ final class Attendee {
         self.phone = phone
         self.website = website
         self.linkedinURL = linkedinURL
+        self.attendeeType = attendeeType
     }
 }
 

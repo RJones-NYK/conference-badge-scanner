@@ -30,4 +30,11 @@ final class Event {
     }
 }
 
+extension Event {
+    var selectedBadgeFields: [BadgeField] {
+        let fields = badgeFieldKeys.compactMap(BadgeField.init(rawValue:))
+        return fields.isEmpty ? BadgeField.defaultSelection : fields
+    }
+}
+
 

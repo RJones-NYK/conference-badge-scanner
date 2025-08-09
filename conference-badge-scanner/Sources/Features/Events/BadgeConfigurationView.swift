@@ -22,6 +22,20 @@ struct BadgeConfigurationView: View {
                         }
                     }
                 }
+                Section("Preview") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(BadgeField.allCases.filter { selectedFields.contains($0) }) { field in
+                            HStack {
+                                Image(systemName: "checkmark.seal.fill").foregroundStyle(.green)
+                                Text(field.displayName).font(.subheadline)
+                            }
+                        }
+                        if selectedFields.isEmpty {
+                            Text("No fields selected").foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
             }
             .navigationTitle("Configure Badge")
             .toolbar {
