@@ -24,7 +24,7 @@ enum BadgeField: String, CaseIterable, Identifiable, Codable {
     }
 
     static var defaultSelection: [BadgeField] {
-        return [.name, .company]
+        return Array(BadgeField.allCases)
     }
 
     static var defaultKeys: [String] { defaultSelection.map { $0.rawValue } }

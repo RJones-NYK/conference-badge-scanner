@@ -9,6 +9,7 @@ import SwiftUI
 import SwiftData
 
 struct ContentView: View {
+    @AppStorage(AppTheme.storageKey) private var appThemeRaw: String = AppTheme.system.rawValue
     @Query(sort: \Event.startDate, order: .reverse) private var events: [Event]
     var body: some View {
         TabView {
@@ -45,6 +46,7 @@ struct ContentView: View {
             }
             .tabItem { Label("Settings", systemImage: "gearshape") }
         }
+        .preferredColorScheme(AppTheme(rawValue: appThemeRaw)?.colorScheme)
     }
 }
 

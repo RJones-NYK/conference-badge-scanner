@@ -8,6 +8,8 @@ struct ScanBadgeView: View {
     let event: Event?
     var onComplete: (UIImage?, String) -> Void
     var onCancel: () -> Void
+    // Optional: return per-field OCR when template regions are available
+    var onMapped: (([String: String]) -> Void)? = nil
 
     @State private var buffer: [String] = []
     @State private var useDocumentScanner = true
@@ -30,7 +32,9 @@ struct ScanBadgeView: View {
                                 return
                             }
                             OCRProcessor.recognizeText(in: img, regionsByKey: map) { mapped in
-                                let merged = mergeRegionText(mapped: mapped, fallback: text)
+                                // fire structured map callback if provided
+                                onMapped?(mapped)
+                                let merged = mergeRegionText(mapped: mapped, fallback: text, event: ev)
                                 onComplete(image, merged)
                                 dismiss()
                             }
@@ -108,9 +112,14 @@ struct ScanBadgeView: View {
         }
     }
 
-    private func mergeRegionText(mapped: [String: String], fallback: String) -> String {
-        // Build a simple ordered output using BadgeField ordering when possible
-        let orderedKeys = BadgeField.allCases.map { $0.rawValue }
+    private func mergeRegionText(mapped: [String: String], fallback: String, event: Event?) -> String {
+        // Prefer event-selected field order if available; fallback to global order
+        let orderedKeys: [String]
+        if let event {
+            orderedKeys = event.selectedBadgeFields.map { $0.rawValue }
+        } else {
+            orderedKeys = BadgeField.allCases.map { $0.rawValue }
+        }
         var lines: [String] = []
         for key in orderedKeys {
             if let val = mapped[key], !val.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {

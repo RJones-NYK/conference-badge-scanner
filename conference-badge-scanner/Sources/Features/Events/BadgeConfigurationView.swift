@@ -47,7 +47,8 @@ struct BadgeConfigurationView: View {
             .onAppear {
                 let current = Set(event.badgeFieldKeys.compactMap(BadgeField.init(rawValue:)))
                 if current.isEmpty {
-                    selectedFields = Set(BadgeField.defaultSelection)
+                    // Auto-select all by default, user can deselect
+                    selectedFields = Set(BadgeField.allCases)
                 } else {
                     selectedFields = current
                 }

@@ -30,7 +30,9 @@ struct NewConversationView: View {
     // Scanner results preview
     @State private var lastScannedImage: UIImage? = nil
     @State private var lastExtractedText: String = ""
+    @State private var lastMappedByKey: [String: String]? = nil
     @State private var confirmCancel = false
+    @State private var showingAutofill = false
 
     // Center HUD feedback (large check or X)
     private enum CenterHUD { case saved, cancelled }
@@ -112,6 +114,14 @@ struct NewConversationView: View {
                             }
                             .frame(minHeight: 100)
                         }
+                        if lastMappedByKey != nil {
+                            Button {
+                                showingAutofill = true
+                            } label: {
+                                Label("Autofill…", systemImage: "wand.and.stars")
+                            }
+                            .buttonStyle(.bordered)
+                        }
                     }
                 }
 
@@ -173,16 +183,46 @@ struct NewConversationView: View {
                 }
                 .overlay { centerHUDView }
                 .fullScreenCover(isPresented: $showingScanner) {
-                    ScanBadgeView(event: selectedEvent ?? event) { image, raw in
+                    ScanBadgeView(event: selectedEvent ?? event, onComplete: { image, raw in
                         lastScannedImage = image
                         lastExtractedText = raw
                         let parsed = TextParsingService.parse(from: raw)
                         apply(parsed)
                         showingScanner = false
-                    } onCancel: {
+                    }, onCancel: {
                         showingScanner = false
-                    }
+                    }, onMapped: { mapped in
+                        lastMappedByKey = mapped
+                    })
                     .ignoresSafeArea()
+                }
+                .fullScreenCover(isPresented: $showingAutofill) {
+                    if let mapped = lastMappedByKey {
+                        AutofillReviewView(event: selectedEvent ?? event,
+                                           originalImage: lastScannedImage,
+                                           rawText: lastExtractedText,
+                                           mappedByKey: mapped,
+                                           onApply: { dict in
+                                               // apply reviewed values to form
+                                               for (field, value) in dict {
+                                                   let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                                                   guard !trimmed.isEmpty else { continue }
+                                                   switch field {
+                                                   case .title: titleText = trimmed
+                                                   case .name: nameText = trimmed
+                                                   case .role: roleText = trimmed
+                                                   case .company: companyText = trimmed
+                                                   case .department: departmentText = trimmed
+                                                   case .email: emailText = trimmed
+                                                   case .other: otherText = trimmed
+                                                   }
+                                               }
+                                               showingAutofill = false
+                                           }, onCancel: {
+                                               showingAutofill = false
+                                           })
+                        .ignoresSafeArea()
+                    }
                 }
             }
         }
