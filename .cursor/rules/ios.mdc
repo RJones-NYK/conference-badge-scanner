@@ -1,0 +1,4 @@
+---
+alwaysApply: true
+---
+Ensure what we build is using Swift and other native apple frameworks. We need to ensure that we follow Sift best practices for all our code and configuration
