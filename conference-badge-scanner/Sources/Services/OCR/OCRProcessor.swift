@@ -8,7 +8,13 @@ enum OCRProcessor {
         let request = VNRecognizeTextRequest { request, _ in
             let results = (request.results as? [VNRecognizedTextObservation]) ?? []
             let strings: [String] = results.compactMap { $0.topCandidates(1).first?.string }
-            completion(strings.joined(separator: "\n"))
+            // Always return on the main queue to avoid updating SwiftUI state from a background thread
+            let output = strings.joined(separator: "\n")
+            if Thread.isMainThread {
+                completion(output)
+            } else {
+                DispatchQueue.main.async { completion(output) }
+            }
         }
         request.recognitionLevel = .accurate
         request.usesLanguageCorrection = true
@@ -16,7 +22,15 @@ enum OCRProcessor {
 
         let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
         DispatchQueue.global(qos: .userInitiated).async {
-            do { try handler.perform([request]) } catch { completion("") }
+            do {
+                try handler.perform([request])
+            } catch {
+                if Thread.isMainThread {
+                    completion("")
+                } else {
+                    DispatchQueue.main.async { completion("") }
+                }
+            }
         }
     }
 

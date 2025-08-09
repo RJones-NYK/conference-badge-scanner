@@ -121,16 +121,15 @@ struct NewConversationView: View {
                     Text("This will clear the form and discard any entered information.")
                 }
                 .overlay { centerHUDView }
-                .sheet(isPresented: $showingScanner) {
-                ScanBadgeView(event: event) { raw in
-                    let parsed = TextParsingService.parse(from: raw)
-                    apply(parsed)
-                    showingScanner = false
-                } onCancel: {
-                    showingScanner = false
-                }
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+                .fullScreenCover(isPresented: $showingScanner) {
+                    ScanBadgeView(event: event) { raw in
+                        let parsed = TextParsingService.parse(from: raw)
+                        apply(parsed)
+                        showingScanner = false
+                    } onCancel: {
+                        showingScanner = false
+                    }
+                    .ignoresSafeArea()
                 }
             }
         }

@@ -10,8 +10,11 @@ struct ConversationDetailView: View {
 
     @State private var fullName: String = ""
     @State private var title: String = ""
+    @State private var role: String = ""
     @State private var company: String = ""
+    @State private var department: String = ""
     @State private var email: String = ""
+    @State private var other: String = ""
     @State private var phone: String = ""
     @State private var website: String = ""
     @State private var linkedinURL: String = ""
@@ -25,13 +28,25 @@ struct ConversationDetailView: View {
         let trimmedFullName = fullName.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedCompany = company.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedRole = role.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedDepartment = department.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedOther = other.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedPhone = phone.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedWebsite = website.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedLinkedIn = linkedinURL.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
 
         if trimmedFullName != (conversation.attendee?.fullName ?? "") { return true }
         if trimmedTitle != (conversation.attendee?.title ?? "") { return true }
+        if trimmedRole != (conversation.attendee?.role ?? "") { return true }
         if trimmedCompany != (conversation.attendee?.company ?? "") { return true }
+        if trimmedDepartment != (conversation.attendee?.department ?? "") { return true }
         if trimmedEmail != (conversation.attendee?.email ?? "") { return true }
+        if trimmedOther != (conversation.attendee?.other ?? "") { return true }
+        if trimmedPhone != (conversation.attendee?.phone ?? "") { return true }
+        if trimmedWebsite != (conversation.attendee?.website ?? "") { return true }
+        if trimmedLinkedIn != (conversation.attendee?.linkedinURL ?? "") { return true }
         if trimmedNotes != conversation.notes { return true }
         if createdAt != conversation.createdAt { return true }
         if followUp != conversation.followUp { return true }
@@ -45,13 +60,55 @@ struct ConversationDetailView: View {
                 if isEditing {
                     ClearableTextField("Name", text: $fullName)
                     ClearableTextField("Title", text: $title)
+                    ClearableTextField("Role", text: $role)
                     ClearableTextField("Company", text: $company)
+                    ClearableTextField("Department", text: $department)
                     ClearableTextField("Email", text: $email)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled(true)
+                        .keyboardType(.emailAddress)
+                    ClearableTextField("Phone", text: $phone)
+                        .keyboardType(.phonePad)
+                    ClearableTextField("Website", text: $website)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled(true)
+                        .keyboardType(.URL)
+                    ClearableTextField("LinkedIn", text: $linkedinURL)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled(true)
+                        .keyboardType(.URL)
+                    ClearableTextField("Other", text: $other)
                 } else {
-                    LabeledContent("Name", value: fullName)
-                    LabeledContent("Title", value: title)
-                    LabeledContent("Company", value: company)
-                    LabeledContent("Email", value: email)
+                    if !fullName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        LabeledContent("Name", value: fullName)
+                    }
+                    if !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        LabeledContent("Title", value: title)
+                    }
+                    if !role.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        LabeledContent("Role", value: role)
+                    }
+                    if !company.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        LabeledContent("Company", value: company)
+                    }
+                    if !department.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        LabeledContent("Department", value: department)
+                    }
+                    if !email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        LabeledContent("Email", value: email)
+                    }
+                    if !phone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        LabeledContent("Phone", value: phone)
+                    }
+                    if !website.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        LabeledContent("Website", value: website)
+                    }
+                    if !linkedinURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        LabeledContent("LinkedIn", value: linkedinURL)
+                    }
+                    if !other.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        LabeledContent("Other", value: other)
+                    }
                 }
             }
             Section("Notes") {
@@ -115,11 +172,14 @@ struct ConversationDetailView: View {
     private func load() {
         fullName = conversation.attendee?.fullName ?? ""
         title = conversation.attendee?.title ?? ""
+        role = conversation.attendee?.role ?? ""
         company = conversation.attendee?.company ?? ""
+        department = conversation.attendee?.department ?? ""
         email = conversation.attendee?.email ?? ""
-        phone = ""
-        website = ""
-        linkedinURL = ""
+        phone = conversation.attendee?.phone ?? ""
+        website = conversation.attendee?.website ?? ""
+        linkedinURL = conversation.attendee?.linkedinURL ?? ""
+        other = conversation.attendee?.other ?? ""
         notes = conversation.notes
         createdAt = conversation.createdAt
         followUp = conversation.followUp
@@ -130,11 +190,16 @@ struct ConversationDetailView: View {
         if conversation.attendee == nil {
             conversation.attendee = Attendee()
         }
-        conversation.attendee?.fullName = fullName.trimmingCharacters(in: .whitespacesAndNewlines)
-        conversation.attendee?.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        conversation.attendee?.company = company.trimmingCharacters(in: .whitespacesAndNewlines)
-        conversation.attendee?.email = email.trimmingCharacters(in: .whitespacesAndNewlines)
-        // Phone/Website/LinkedIn removed from editing
+        conversation.attendee?.fullName = fullName.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        conversation.attendee?.title = title.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        conversation.attendee?.role = role.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        conversation.attendee?.company = company.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        conversation.attendee?.department = department.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        conversation.attendee?.email = email.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        conversation.attendee?.other = other.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        conversation.attendee?.phone = phone.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        conversation.attendee?.website = website.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        conversation.attendee?.linkedinURL = linkedinURL.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
         conversation.notes = notes
         conversation.createdAt = createdAt
         conversation.followUp = followUp

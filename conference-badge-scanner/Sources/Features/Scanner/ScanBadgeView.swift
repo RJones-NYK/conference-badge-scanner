@@ -100,6 +100,11 @@ struct ScanBadgeView: View {
             .padding(.vertical, 8)
             .background(.thinMaterial)
         }
+        .onChange(of: useDocumentScanner) { _, newValue in
+            // Defensive: re-rendering toggles while a document camera is active can crash in iOS 17.
+            // Delay switch until next runloop on main to let VisionKit settle.
+            DispatchQueue.main.async { _ = newValue }
+        }
     }
 
     private func mergeRegionText(mapped: [String: String], fallback: String) -> String {

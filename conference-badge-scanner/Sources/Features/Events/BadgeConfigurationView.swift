@@ -11,6 +11,9 @@ struct BadgeConfigurationView: View {
     @State private var regions: [String: NormalizedRect] = [:]
     @State private var showingScanner = false
     @State private var showingRegionEditor = false
+    @State private var showingFullImage = false
+    @State private var ocrPreview: [String: String] = [:]
+    @State private var isOCRRunning = false
 
     var body: some View {
         NavigationStack {
@@ -52,11 +55,24 @@ struct BadgeConfigurationView: View {
                     templateImage = img
                 }
                 regions = event.badgeFieldRegionsMap
+                updatePreviewOCR()
             }
             .fullScreenCover(isPresented: $showingRegionEditor) {
                 if let image = templateImage {
                     RegionEditorView(image: image, fields: Array(selectedFields), regions: $regions)
                 }
+            }
+            .fullScreenCover(isPresented: $showingFullImage) {
+                ZStack {
+                    Color.black.ignoresSafeArea()
+                    if let image = templateImage {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFit()
+                            .ignoresSafeArea()
+                    }
+                }
+                .onTapGesture { showingFullImage = false }
             }
         }
     }
@@ -80,23 +96,53 @@ struct BadgeConfigurationView: View {
     }
 
     private var badgePreview: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(.ultraThinMaterial)
-            VStack(spacing: 8) {
-                Text("Conference Badge").font(.headline)
-                ForEach(BadgeField.allCases.filter { selectedFields.contains($0) }) { field in
-                    Text(field.displayName)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+        Group {
+            if let image = templateImage, regions.isEmpty {
+                // Show the scanned badge until regions are defined
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: .infinity)
+                    .cornerRadius(12)
+            } else if !regions.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("Extracted from Template").font(.headline)
+                        if isOCRRunning { ProgressView().scaleEffect(0.8) }
+                    }
+                    let ordered = BadgeField.allCases.filter { selectedFields.contains($0) }
+                    if ordered.isEmpty {
+                        Text("No fields selected").foregroundStyle(.secondary)
+                    } else {
+                        ForEach(ordered) { field in
+                            let value = (ocrPreview[field.rawValue] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                            if !value.isEmpty {
+                                LabeledContent(field.displayName, value: value)
+                            }
+                        }
+                    }
                 }
-                if selectedFields.isEmpty {
-                    Text("No fields selected").foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(.ultraThinMaterial)
+                    VStack(spacing: 8) {
+                        Text("Conference Badge").font(.headline)
+                        ForEach(BadgeField.allCases.filter { selectedFields.contains($0) }) { field in
+                            Text(field.displayName)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                        if selectedFields.isEmpty {
+                            Text("No fields selected").foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(16)
                 }
+                .frame(maxWidth: .infinity, minHeight: 140)
             }
-            .padding(16)
         }
-        .frame(maxWidth: .infinity, minHeight: 140)
     }
 
     private var templateSection: some View {
@@ -106,44 +152,62 @@ struct BadgeConfigurationView: View {
                     .resizable()
                     .scaledToFit()
                     .frame(maxHeight: 160)
+                    .onTapGesture { showingFullImage = true }
             } else {
-                Text("No template image. Add one by scanning a badge.")
-                    .foregroundStyle(.secondary)
-            }
-            HStack {
-                Button {
-                    showingScanner = true
-                } label: {
-                    Label(templateImage == nil ? "Scan Template Badge" : "Rescan Template", systemImage: "doc.viewfinder")
-                }
-                if templateImage != nil {
-                    Button(role: .destructive) {
-                        templateImage = nil
-                        regions.removeAll()
-                    } label: {
-                        Label("Remove", systemImage: "trash")
-                    }
+                VStack(spacing: 12) {
+                    Text("No template image, please scan using the button below")
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
+                    HStack { Spacer()
+                        Button { showingScanner = true } label: {
+                            Label("Scan", systemImage: "doc.viewfinder")
+                        }
+                        .buttonStyle(.borderedProminent)
+                        Spacer() }
                 }
             }
             if templateImage != nil {
-                Button {
-                    showingRegionEditor = true
-                } label: {
-                    Label("Define Regions", systemImage: "rectangle.dashed.badge.record")
+                HStack(spacing: 12) {
+                    Button { showingScanner = true } label: { Label("Re-Scan", systemImage: "doc.viewfinder") }
+                        .buttonStyle(.bordered)
+
+                    Button { showingRegionEditor = true } label: { Label("Format", systemImage: "rectangle.dashed.badge.record") }
+                        .buttonStyle(.borderedProminent)
+
+                    Button(role: .destructive) {
+                        templateImage = nil
+                        regions.removeAll()
+                        ocrPreview.removeAll()
+                    } label: { Label("Remove", systemImage: "trash") }
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
             }
         }
         .sheet(isPresented: $showingScanner) {
-            DocumentScannerView { image, _ in
+            // For template capture we want the full page without any perspective crop.
+            DocumentScannerView(onScanned: { image, _ in
                 // Image is already preprocessed by DocumentScannerView
                 templateImage = image
                 showingScanner = false
-            } onCancel: {
+                updatePreviewOCR()
+            }, onCancel: {
                 showingScanner = false
-            }
+            }, enablePerspectiveCorrection: false)
             .ignoresSafeArea()
+        }
+        .onChange(of: regions) { _, _ in updatePreviewOCR() }
+        .onChange(of: templateImage) { _, _ in updatePreviewOCR() }
+    }
+
+    private func updatePreviewOCR() {
+        guard let image = templateImage, !regions.isEmpty else {
+            ocrPreview = [:]
+            return
+        }
+        isOCRRunning = true
+        OCRProcessor.recognizeText(in: image, regionsByKey: regions) { mapped in
+            self.ocrPreview = mapped
+            self.isOCRRunning = false
         }
     }
 }

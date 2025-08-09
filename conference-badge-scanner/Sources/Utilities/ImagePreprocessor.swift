@@ -44,7 +44,9 @@ enum ImagePreprocessor {
             let w = CGFloat(cg.width)
             let h = CGFloat(cg.height)
 
-            func toPoint(_ p: CGPoint) -> CGPoint { CGPoint(x: p.x * w, y: (1 - p.y) * h) }
+        // Vision's VNRectangleObservation uses a bottom-left origin, same as Core Image.
+        // Do NOT invert Y when mapping to CI coordinates.
+        func toPoint(_ p: CGPoint) -> CGPoint { CGPoint(x: p.x * w, y: p.y * h) }
 
             let topLeft = toPoint(rect.topLeft)
             let topRight = toPoint(rect.topRight)
@@ -60,7 +62,8 @@ enum ImagePreprocessor {
             filter.setValue(CIVector(cgPoint: bottomRight), forKey: "inputBottomRight")
 
             guard let output = filter.outputImage,
-                  let outCG = ciContext.createCGImage(output, from: output.extent) else { return nil }
+                  let outCG = ciContext.createCGImage(output.oriented(.downMirrored), from: output.extent) else { return nil }
+            // Correct for camera mirroring and orientation so saved image is upright.
             return UIImage(cgImage: outCG, scale: image.scale, orientation: .up)
         } catch {
             return nil
@@ -70,11 +73,16 @@ enum ImagePreprocessor {
     private static func autoEnhance(image: UIImage) -> UIImage? {
         guard let cg = image.cgImage else { return nil }
         let ci = CIImage(cgImage: cg)
-        let filters = ci.autoAdjustmentFilters(options: [
+        // CIImageAutoAdjustmentOption.features expects an array of CIFeature objects, not a Bool.
+        // Passing a Bool can crash internally when Core Image calls `count` on the value.
+        // Omit features entirely or provide an empty array to disable.
+        var options: [CIImageAutoAdjustmentOption: Any] = [
             CIImageAutoAdjustmentOption.enhance: true,
-            CIImageAutoAdjustmentOption.redEye: false,
-            CIImageAutoAdjustmentOption.features: false
-        ])
+            CIImageAutoAdjustmentOption.redEye: false
+        ]
+        options[CIImageAutoAdjustmentOption.features] = [] as [Any]
+
+        let filters = ci.autoAdjustmentFilters(options: options)
         let output = filters.reduce(ci) { current, filter in
             filter.setValue(current, forKey: kCIInputImageKey)
             return filter.outputImage ?? current
