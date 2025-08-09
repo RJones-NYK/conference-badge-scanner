@@ -77,16 +77,7 @@ struct NewConversationView: View {
                     DatePicker("Date & Time", selection: $occurredAt, displayedComponents: [.date, .hourAndMinute])
                 }
 
-                if showAttendeeType {
-                    Section("Attendee Type") {
-                        Picker("Type", selection: $attendeeType) {
-                            ForEach(AttendeeType.allCases) { t in
-                                Text(t.displayName).tag(t)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                    }
-                }
+                // Attendee type is shown as the chip picker in Details above when enabled
             }
             .navigationTitle("New Conversation")
             .toolbar {

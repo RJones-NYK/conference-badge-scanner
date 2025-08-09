@@ -129,7 +129,18 @@ struct ConversationsListView: View {
 
     private var conversationsList: some View {
         List {
-            Section(header: filterHeader) {
+            if !events.isEmpty {
+                Section {
+                    Picker("Event", selection: $selectedEvent) {
+                        Text("All Events").tag(nil as Event?)
+                        ForEach(events) { event in
+                            Text(event.name).tag(event as Event?)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                }
+            }
+            Section {
                 ForEach(filteredConversations) { convo in
                     conversationRow(convo)
                 }
@@ -151,16 +162,6 @@ struct ConversationsListView: View {
                     )
                 }
             }
-        }
-    }
-
-    private var filterHeader: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "line.3.horizontal.decrease.circle")
-                .foregroundStyle(.secondary)
-            Text(selectedEvent?.name ?? "All Events")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
         }
     }
 
