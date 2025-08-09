@@ -6,7 +6,10 @@ struct NewConversationView: View {
     @Environment(\.dismiss) private var dismiss
 
     let event: Event
+    // Optional completion action (e.g., to close a presenting sheet)
     let onComplete: (() -> Void)?
+    // Controls whether the view should dismiss after save. When false, the form resets for rapid entry.
+    let dismissOnSave: Bool
 
     @State private var fullName: String = ""
     @State private var roleOrTitle: String = ""
@@ -100,6 +103,12 @@ struct NewConversationView: View {
         }
     }
 
+    init(event: Event, onComplete: (() -> Void)? = nil, dismissOnSave: Bool = true) {
+        self.event = event
+        self.onComplete = onComplete
+        self.dismissOnSave = dismissOnSave
+    }
+
     private var canSave: Bool {
         if showName { !fullName.trimmingCharacters(in: .whitespaces).isEmpty } else { true }
     }
@@ -133,7 +142,23 @@ struct NewConversationView: View {
         context.insert(convo)
 
         onComplete?()
-        dismiss()
+        if dismissOnSave {
+            dismiss()
+        } else {
+            resetForm()
+        }
+    }
+
+    private func resetForm() {
+        fullName = ""
+        roleOrTitle = ""
+        company = ""
+        email = ""
+        notes = ""
+        followUp = false
+        occurredAt = Date()
+        attendeeType = .attendee
+        showingScanner = false
     }
 }
 

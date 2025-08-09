@@ -9,12 +9,26 @@ import SwiftUI
 import SwiftData
 
 struct ContentView: View {
+    @Query(sort: \Event.startDate, order: .reverse) private var events: [Event]
     var body: some View {
         TabView {
             NavigationStack {
                 EventListView()
             }
             .tabItem { Label("Events", systemImage: "calendar") }
+
+            Group {
+                if let event = events.first {
+                    NewConversationView(event: event, dismissOnSave: false)
+                } else {
+                    ContentUnavailableView(
+                        "No Events",
+                        systemImage: "calendar.badge.plus",
+                        description: Text("Create an event first on the Events tab.")
+                    )
+                }
+            }
+            .tabItem { Label("New Conversation", systemImage: "square.and.pencil") }
 
             NavigationStack {
                 ConversationsListView()
