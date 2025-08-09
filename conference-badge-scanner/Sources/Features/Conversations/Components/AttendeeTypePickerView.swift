@@ -31,8 +31,9 @@ struct AttendeeTypePickerView: View {
                                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                                     .fill((isSelected ? color(for: type) : .gray).opacity(isSelected ? 0.18 : 0.10))
                                 Image(systemName: type.iconName)
+                                    .symbolRenderingMode(.palette)
+                                    .foregroundStyle(isSelected ? color(for: type) : .gray, .gray.opacity(0.25))
                                     .font(.system(size: isSelected ? 26 : 22, weight: .semibold))
-                                    .foregroundStyle(isSelected ? color(for: type) : .gray)
                             }
                             .frame(width: baseSize, height: baseSize)
                             .scaleEffect(isSelected ? 1.06 : 1.0)

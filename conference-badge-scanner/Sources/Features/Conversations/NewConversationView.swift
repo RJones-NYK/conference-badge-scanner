@@ -42,6 +42,8 @@ struct NewConversationView: View {
                             Text("Scan Badge with Camera")
                         }
                     }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
                 }
 
                 Section("Details") {

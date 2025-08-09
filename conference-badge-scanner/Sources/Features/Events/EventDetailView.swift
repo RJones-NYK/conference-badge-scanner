@@ -20,6 +20,27 @@ struct EventDetailView: View {
 
     var body: some View {
         Form {
+            if !isEditing {
+                Section {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label(event.name, systemImage: "calendar")
+                            .font(.headline)
+                        HStack(spacing: 6) {
+                            Text(start, format: .dateTime.month().day().year())
+                            if let end = event.endDate {
+                                Text("–")
+                                Text(end, format: .dateTime.month().day().year())
+                            }
+                        }
+                        .foregroundStyle(.secondary)
+                        if let loc = event.location, !loc.isEmpty {
+                            Label(loc, systemImage: "mappin.and.ellipse")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
             Section("Event Name") {
                 TextField("Event name", text: $name)
                     .disabled(!isEditing)

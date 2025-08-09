@@ -64,6 +64,23 @@ struct ScanBadgeView: View {
                 .padding()
             }
         }
+        .safeAreaInset(edge: .top) {
+            HStack(spacing: 12) {
+                Text(useDocumentScanner ? "Document Scanner" : "Live Text Scanner")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Picker("", selection: $useDocumentScanner) {
+                    Text("Doc").tag(true)
+                    Text("Live").tag(false)
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 140)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(.thinMaterial)
+        }
     }
 }
 
