@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UIKit
 
 struct NewConversationView: View {
     @Environment(\.modelContext) private var context
@@ -26,6 +27,9 @@ struct NewConversationView: View {
     @State private var occurredAt: Date = Date()
 
     @State private var showingScanner = false
+    // Scanner results preview
+    @State private var lastScannedImage: UIImage? = nil
+    @State private var lastExtractedText: String = ""
     @State private var confirmCancel = false
 
     // Center HUD feedback (large check or X)
@@ -39,10 +43,16 @@ struct NewConversationView: View {
     // Conversations always show all fields now
     @State private var attendeeType: AttendeeType = .attendee
 
+    // Events list and selection
+    @Query(sort: \Event.startDate, order: .reverse) private var events: [Event]
+    @State private var selectedEvent: Event? = nil
+    @State private var eventManuallySelected: Bool = false
+
     var body: some View {
         NavigationStack {
             ScrollViewReader { proxy in
                 Form {
+                // Event selection & Scan action
                 Section {
                     EmptyView()
                 } header: {
@@ -53,7 +63,7 @@ struct NewConversationView: View {
                         } label: {
                             HStack {
                                 Image(systemName: "camera.viewfinder")
-                                Text("Scan Badge with Camera")
+                                Text("Scan Badge")
                             }
                         }
                         .buttonStyle(.borderedProminent)
@@ -63,6 +73,47 @@ struct NewConversationView: View {
                     .padding(.top, 4)
                 }
                 .id("top")
+
+                if !events.isEmpty {
+                    Section("Event") {
+                        Picker("Event", selection: Binding<Event?>(
+                            get: { selectedEvent ?? event },
+                            set: { newValue in
+                                selectedEvent = newValue
+                                eventManuallySelected = true
+                            }
+                        )) {
+                            ForEach(events) { ev in
+                                Text(ev.name).tag(ev as Event?)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                    }
+                }
+
+                if !lastExtractedText.isEmpty || lastScannedImage != nil {
+                    Section("Scan Result") {
+                        HStack(alignment: .top, spacing: 12) {
+                            if let img = lastScannedImage {
+                                Image(uiImage: img)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 140)
+                                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                            .strokeBorder(Color.secondary.opacity(0.2))
+                                    )
+                            }
+                            ScrollView {
+                                Text(lastExtractedText)
+                                    .font(.footnote)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            .frame(minHeight: 100)
+                        }
+                    }
+                }
 
                 Section("Details") {
                     TextField("Title", text: $titleText)
@@ -122,7 +173,9 @@ struct NewConversationView: View {
                 }
                 .overlay { centerHUDView }
                 .fullScreenCover(isPresented: $showingScanner) {
-                    ScanBadgeView(event: event) { raw in
+                    ScanBadgeView(event: selectedEvent ?? event) { image, raw in
+                        lastScannedImage = image
+                        lastExtractedText = raw
                         let parsed = TextParsingService.parse(from: raw)
                         apply(parsed)
                         showingScanner = false
@@ -132,6 +185,14 @@ struct NewConversationView: View {
                     .ignoresSafeArea()
                 }
             }
+        }
+        .onAppear {
+            // Initialize selected event and auto-pick by date if appropriate
+            selectedEvent = event
+            autoSelectEventIfNeeded(for: occurredAt)
+        }
+        .onChange(of: occurredAt) { _, newValue in
+            if !eventManuallySelected { autoSelectEventIfNeeded(for: newValue) }
         }
     }
 
@@ -170,7 +231,7 @@ struct NewConversationView: View {
 
         attendee.attendeeType = attendeeType.rawValue
 
-        let convo = Conversation(event: event, attendee: attendee, notes: notes, followUp: followUp)
+        let convo = Conversation(event: selectedEvent ?? event, attendee: attendee, notes: notes, followUp: followUp)
         convo.createdAt = occurredAt
         context.insert(convo)
 
@@ -197,6 +258,8 @@ struct NewConversationView: View {
         occurredAt = Date()
         attendeeType = .attendee
         showingScanner = false
+        lastScannedImage = nil
+        lastExtractedText = ""
     }
 
     private func endEditingAndScrollTop(_ proxy: ScrollViewProxy) {
@@ -235,6 +298,21 @@ struct NewConversationView: View {
 
     private func hideHUD() {
         withAnimation { centerHUD = nil }
+    }
+
+    private func autoSelectEventIfNeeded(for date: Date) {
+        // Prefer event whose date range contains the occurredAt date
+        if let match = events.first(where: { eventContainsDate($0, date: date) }) {
+            selectedEvent = match
+        }
+    }
+
+    private func eventContainsDate(_ ev: Event, date: Date) -> Bool {
+        if let end = ev.endDate {
+            return ev.startDate <= date && date <= end
+        } else {
+            return ev.startDate <= date
+        }
     }
 }
 

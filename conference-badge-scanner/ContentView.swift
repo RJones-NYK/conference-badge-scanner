@@ -17,6 +17,11 @@ struct ContentView: View {
             }
             .tabItem { Label("Events", systemImage: "calendar") }
 
+            NavigationStack {
+                ConversationsListView()
+            }
+            .tabItem { Label("Conversations", systemImage: "text.bubble") }
+
             Group {
                 if let event = events.first {
                     NewConversationView(event: event, dismissOnSave: false)
@@ -28,12 +33,17 @@ struct ContentView: View {
                     )
                 }
             }
-            .tabItem { Label("New Conversation", systemImage: "square.and.pencil") }
+            .tabItem { Label("Capture", systemImage: "camera.viewfinder") }
 
             NavigationStack {
-                ConversationsListView()
+                AnalyticsView()
             }
-            .tabItem { Label("Conversations", systemImage: "text.bubble") }
+            .tabItem { Label("Analytics", systemImage: "chart.bar") }
+
+            NavigationStack {
+                SettingsView()
+            }
+            .tabItem { Label("Settings", systemImage: "gearshape") }
         }
     }
 }

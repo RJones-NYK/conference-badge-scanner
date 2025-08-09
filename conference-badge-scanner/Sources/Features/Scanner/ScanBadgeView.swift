@@ -1,11 +1,12 @@
 import SwiftUI
 import VisionKit
 import SwiftData
+import UIKit
 
 struct ScanBadgeView: View {
     @Environment(\.dismiss) private var dismiss
     let event: Event?
-    var onComplete: (String) -> Void
+    var onComplete: (UIImage?, String) -> Void
     var onCancel: () -> Void
 
     @State private var buffer: [String] = []
@@ -16,7 +17,7 @@ struct ScanBadgeView: View {
         ZStack(alignment: .bottom) {
             Group {
                 if useDocumentScanner, VNDocumentCameraViewController.isSupported {
-                    DocumentScannerView { image, text in
+                    DocumentScannerView(onScanned: { image, text in
                         // Prefer document scanner OCR result
                         scannedImage = image
                         buffer = text.components(separatedBy: "\n").filter { !$0.isEmpty }
@@ -24,23 +25,23 @@ struct ScanBadgeView: View {
                         if let img = scannedImage, let ev = event {
                             let map = ev.badgeFieldRegionsMap
                             guard !map.isEmpty else {
-                                onComplete(text)
+                                onComplete(image, text)
                                 dismiss()
                                 return
                             }
                             OCRProcessor.recognizeText(in: img, regionsByKey: map) { mapped in
                                 let merged = mergeRegionText(mapped: mapped, fallback: text)
-                                onComplete(merged)
+                                onComplete(image, merged)
                                 dismiss()
                             }
                         } else {
-                            onComplete(text)
+                            onComplete(image, text)
                             dismiss()
                         }
-                    } onCancel: {
+                    }, onCancel: {
                         onCancel();
                         dismiss()
-                    }
+                    }, enablePerspectiveCorrection: false)
                     .ignoresSafeArea()
                 } else if ScannerAvailability.isSupported && ScannerAvailability.isAvailable {
                     BadgeScannerView { text in
@@ -70,7 +71,7 @@ struct ScanBadgeView: View {
                         Spacer()
                         Button {
                             let raw = buffer.joined(separator: "\n")
-                            onComplete(raw)
+                            onComplete(nil, raw)
                             dismiss()
                         } label: {
                             Label("Use Text", systemImage: "checkmark.circle.fill")

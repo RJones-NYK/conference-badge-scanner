@@ -152,6 +152,7 @@ struct BadgeConfigurationView: View {
                     .resizable()
                     .scaledToFit()
                     .frame(maxHeight: 160)
+                    .frame(maxWidth: .infinity, alignment: .center)
                     .onTapGesture { showingFullImage = true }
             } else {
                 VStack(spacing: 12) {
@@ -162,25 +163,79 @@ struct BadgeConfigurationView: View {
                     HStack { Spacer()
                         Button { showingScanner = true } label: {
                             Label("Scan", systemImage: "doc.viewfinder")
+                                .symbolRenderingMode(.monochrome)
+                                .foregroundStyle(.white)
                         }
                         .buttonStyle(.borderedProminent)
                         Spacer() }
                 }
             }
             if templateImage != nil {
-                HStack(spacing: 12) {
-                    Button { showingScanner = true } label: { Label("Re-Scan", systemImage: "doc.viewfinder") }
-                        .buttonStyle(.bordered)
+                HStack(spacing: 24) {
+                    // Re-Scan (Blue)
+                    Button {
+                        showingScanner = true
+                    } label: {
+                        VStack(spacing: 8) {
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .fill(Color.blue)
+                                .frame(width: 56, height: 56)
+                                .overlay(
+                                    Image(systemName: "doc.viewfinder")
+                                        .font(.system(size: 24, weight: .semibold))
+                                        .symbolRenderingMode(.monochrome)
+                                        .foregroundStyle(.white)
+                                )
+                            Text("Re-Scan")
+                                .font(.caption)
+                        }
+                    }
+                    .buttonStyle(.plain)
 
-                    Button { showingRegionEditor = true } label: { Label("Format", systemImage: "rectangle.dashed.badge.record") }
-                        .buttonStyle(.borderedProminent)
+                    // Format (Green)
+                    Button {
+                        showingRegionEditor = true
+                    } label: {
+                        VStack(spacing: 8) {
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .fill(Color.green)
+                                .frame(width: 56, height: 56)
+                                .overlay(
+                                    Image(systemName: "textformat.characters")
+                                        .font(.system(size: 24, weight: .semibold))
+                                        .symbolRenderingMode(.monochrome)
+                                        .foregroundStyle(.white)
+                                )
+                            Text("Format")
+                                .font(.caption)
+                        }
+                    }
+                    .buttonStyle(.plain)
 
+                    // Delete (Red)
                     Button(role: .destructive) {
                         templateImage = nil
                         regions.removeAll()
                         ocrPreview.removeAll()
-                    } label: { Label("Remove", systemImage: "trash") }
+                    } label: {
+                        VStack(spacing: 8) {
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .fill(Color.red)
+                                .frame(width: 56, height: 56)
+                                .overlay(
+                                    Image(systemName: "trash")
+                                        .font(.system(size: 24, weight: .semibold))
+                                        .symbolRenderingMode(.monochrome)
+                                        .foregroundStyle(.white)
+                                )
+                            Text("Delete")
+                                .font(.caption)
+                        }
+                    }
+                    .buttonStyle(.plain)
                 }
+                .frame(maxWidth: .infinity)
+                .padding(.top, 4)
             }
         }
         .sheet(isPresented: $showingScanner) {
