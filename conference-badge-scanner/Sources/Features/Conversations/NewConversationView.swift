@@ -26,43 +26,69 @@ struct NewConversationView: View {
     @State private var occurredAt: Date = Date()
 
     @State private var showingScanner = false
+    @State private var confirmCancel = false
+
+    // Center HUD feedback (large check or X)
+    private enum CenterHUD { case saved, cancelled }
+    @State private var centerHUD: CenterHUD? = nil
+
+    // Focus handling to dismiss keyboard when saving/cancelling
+    private enum FocusField: Hashable { case title, name, role, company, department, email, other, notes }
+    @FocusState private var focusedField: FocusField?
 
     // Conversations always show all fields now
     @State private var attendeeType: AttendeeType = .attendee
 
     var body: some View {
         NavigationStack {
-            Form {
+            ScrollViewReader { proxy in
+                Form {
                 Section {
-                    Button {
-                        showingScanner = true
-                    } label: {
-                        HStack {
-                            Image(systemName: "camera.viewfinder")
-                            Text("Scan Badge with Camera")
+                    EmptyView()
+                } header: {
+                    HStack {
+                        Spacer()
+                        Button {
+                            showingScanner = true
+                        } label: {
+                            HStack {
+                                Image(systemName: "camera.viewfinder")
+                                Text("Scan Badge with Camera")
+                            }
                         }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+                        Spacer()
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
+                    .padding(.top, 4)
                 }
+                .id("top")
 
                 Section("Details") {
                     TextField("Title", text: $titleText)
+                        .focused($focusedField, equals: .title)
                     TextField("Name", text: $nameText)
+                        .focused($focusedField, equals: .name)
                     TextField("Role", text: $roleText)
+                        .focused($focusedField, equals: .role)
                     TextField("Company", text: $companyText)
+                        .focused($focusedField, equals: .company)
                     TextField("Department", text: $departmentText)
+                        .focused($focusedField, equals: .department)
                     TextField("Email", text: $emailText)
                         .keyboardType(.emailAddress)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled(true)
+                        .focused($focusedField, equals: .email)
                     TextField("Other", text: $otherText)
+                        .focused($focusedField, equals: .other)
                     AttendeeTypePickerView(selection: $attendeeType)
                 }
 
                 Section("Notes") {
                     TextField("What did you discuss?", text: $notes, axis: .vertical)
                         .lineLimit(5, reservesSpace: true)
+                        .focused($focusedField, equals: .notes)
                 }
 
                 Section("When") {
@@ -70,15 +96,32 @@ struct NewConversationView: View {
                 }
 
                 // Attendee type is shown as the chip picker in Details above when enabled
-            }
-            .navigationTitle("New Conversation")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { save() }.disabled(!canSave)
                 }
-            }
-            .sheet(isPresented: $showingScanner) {
+                .navigationTitle("New Conversation")
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel", role: .destructive) { confirmCancel = true }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Save") { save(proxy: proxy) }.disabled(!canSave)
+                    }
+                }
+                .alert("Are you sure?", isPresented: $confirmCancel) {
+                    Button("Discard", role: .destructive) {
+                        if dismissOnSave {
+                            dismiss()
+                        } else {
+                            resetForm()
+                            endEditingAndScrollTop(proxy)
+                            showHUD(.cancelled)
+                        }
+                    }
+                    Button("Cancel", role: .cancel) { }
+                } message: {
+                    Text("This will clear the form and discard any entered information.")
+                }
+                .overlay { centerHUDView }
+                .sheet(isPresented: $showingScanner) {
                 ScanBadgeView(event: event) { raw in
                     let parsed = TextParsingService.parse(from: raw)
                     apply(parsed)
@@ -88,6 +131,7 @@ struct NewConversationView: View {
                 }
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
+                }
             }
         }
     }
@@ -108,7 +152,7 @@ struct NewConversationView: View {
         if emailText.isEmpty { emailText = parsed.email ?? emailText }
     }
 
-    private func save() {
+    private func save(proxy: ScrollViewProxy) {
         // Try to dedupe by email or phone
         let existing = DedupeService.findExistingAttendee(email: emailText.isEmpty ? nil : emailText, phone: nil, context: context)
         let attendee: Attendee = existing ?? {
@@ -136,6 +180,8 @@ struct NewConversationView: View {
             dismiss()
         } else {
             resetForm()
+            endEditingAndScrollTop(proxy)
+            showHUD(.saved)
         }
     }
 
@@ -152,6 +198,44 @@ struct NewConversationView: View {
         occurredAt = Date()
         attendeeType = .attendee
         showingScanner = false
+    }
+
+    private func endEditingAndScrollTop(_ proxy: ScrollViewProxy) {
+        focusedField = nil
+        withAnimation { proxy.scrollTo("top", anchor: .top) }
+    }
+
+    @ViewBuilder
+    private var centerHUDView: some View {
+        if let centerHUD, !dismissOnSave {
+            ZStack {
+                Color.clear.contentShape(Rectangle()).ignoresSafeArea()
+                VStack(spacing: 12) {
+                    Image(systemName: centerHUD == .saved ? "checkmark.circle.fill" : "xmark.circle.fill")
+                        .font(.system(size: 56, weight: .semibold))
+                        .foregroundStyle(centerHUD == .saved ? .green : .red)
+                    Text(centerHUD == .saved ? "Conversation Saved" : "Cancelled")
+                        .font(.headline)
+                        .bold()
+                }
+                .padding(24)
+                .background(.ultraThinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            }
+            .transition(.opacity.combined(with: .scale))
+            .onTapGesture { hideHUD() }
+        }
+    }
+
+    private func showHUD(_ kind: CenterHUD) {
+        withAnimation { centerHUD = kind }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+            hideHUD()
+        }
+    }
+
+    private func hideHUD() {
+        withAnimation { centerHUD = nil }
     }
 }
 

@@ -66,8 +66,32 @@ struct EventDetailView: View {
 
             Section("Schedule") {
                 if isEditing {
-                    DatePicker("Start", selection: $start, displayedComponents: [.date])
-                    DatePicker("End", selection: Binding(get: { max(end, start) }, set: { end = max($0, start) }), displayedComponents: [.date])
+                    if #available(iOS 16.0, *) {
+                        let binding = Binding<DateInterval?>(
+                            get: {
+                                DateInterval(start: start, end: end)
+                            },
+                            set: { newValue in
+                                if let v = newValue {
+                                    start = v.start
+                                    end = max(v.end, v.start)
+                                }
+                            }
+                        )
+                        GroupBox {
+                            CalendarRangePicker(range: binding)
+                                .scaleEffect(0.92)
+                                .contentShape(Rectangle())
+                                .frame(maxWidth: .infinity, alignment: .center)
+                                .padding(.vertical, 2)
+                        }
+                        .listRowInsets(EdgeInsets(top: 2, leading: 28, bottom: 2, trailing: 28))
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
+                    } else {
+                        DatePicker("Start", selection: $start, displayedComponents: [.date])
+                        DatePicker("End", selection: Binding(get: { max(end, start) }, set: { end = max($0, start) }), displayedComponents: [.date])
+                    }
                 } else {
                     LabeledContent("Start", value: start.formatted(.dateTime.month().day().year()))
                     if let endDate = event.endDate {
