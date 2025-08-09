@@ -12,9 +12,13 @@ struct NewConversationView: View {
     let dismissOnSave: Bool
 
     @State private var fullName: String = ""
-    @State private var roleOrTitle: String = ""
-    @State private var company: String = ""
-    @State private var email: String = ""
+    @State private var titleText: String = ""
+    @State private var nameText: String = ""
+    @State private var roleText: String = ""
+    @State private var companyText: String = ""
+    @State private var departmentText: String = ""
+    @State private var emailText: String = ""
+    @State private var otherText: String = ""
     // Email is kept; Phone/Website/LinkedIn removed
 
     @State private var notes: String = ""
@@ -23,14 +27,7 @@ struct NewConversationView: View {
 
     @State private var showingScanner = false
 
-    private var selected: Set<BadgeField> { Set(event.selectedBadgeFields) }
-
-    private var showName: Bool { selected.contains(.name) }
-    private var showTitle: Bool { selected.contains(.title) && !selected.contains(.role) }
-    private var showRole: Bool { selected.contains(.role) || (selected.contains(.title) && selected.contains(.role)) }
-    private var showCompany: Bool { selected.contains(.company) }
-    private var showEmail: Bool { true }
-    private var showAttendeeType: Bool { selected.contains(.attendeeType) }
+    // Conversations always show all fields now
     @State private var attendeeType: AttendeeType = .attendee
 
     var body: some View {
@@ -50,25 +47,17 @@ struct NewConversationView: View {
                 }
 
                 Section("Details") {
-                    if showName {
-                        TextField("Name", text: $fullName)
-                    }
-                    if showTitle {
-                        TextField("Title", text: $roleOrTitle)
-                    }
-                    if showRole {
-                        TextField("Role", text: $roleOrTitle)
-                    }
-                    if showCompany {
-                        TextField("Company", text: $company)
-                    }
-                    TextField("Email", text: $email)
+                    TextField("Title", text: $titleText)
+                    TextField("Name", text: $nameText)
+                    TextField("Role", text: $roleText)
+                    TextField("Company", text: $companyText)
+                    TextField("Department", text: $departmentText)
+                    TextField("Email", text: $emailText)
                         .keyboardType(.emailAddress)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled(true)
-                    if showAttendeeType {
-                        AttendeeTypePickerView(selection: $attendeeType)
-                    }
+                    TextField("Other", text: $otherText)
+                    AttendeeTypePickerView(selection: $attendeeType)
                 }
 
                 Section("Notes") {
@@ -109,33 +98,34 @@ struct NewConversationView: View {
         self.dismissOnSave = dismissOnSave
     }
 
-    private var canSave: Bool {
-        if showName { !fullName.trimmingCharacters(in: .whitespaces).isEmpty } else { true }
-    }
+    private var canSave: Bool { true }
 
     private func apply(_ parsed: ParsedAttendee) {
-        if showName, fullName.isEmpty { fullName = parsed.fullName ?? fullName }
-        if (showTitle || showRole), roleOrTitle.isEmpty { roleOrTitle = parsed.title ?? roleOrTitle }
-        if showCompany, company.isEmpty { company = parsed.company ?? company }
-        if email.isEmpty { email = parsed.email ?? email }
+        if nameText.isEmpty { nameText = parsed.fullName ?? nameText }
+        if titleText.isEmpty { titleText = parsed.title ?? titleText }
+        if roleText.isEmpty { roleText = parsed.title ?? roleText }
+        if companyText.isEmpty { companyText = parsed.company ?? companyText }
+        if emailText.isEmpty { emailText = parsed.email ?? emailText }
     }
 
     private func save() {
         // Try to dedupe by email or phone
-        let existing = DedupeService.findExistingAttendee(email: email.isEmpty ? nil : email, phone: nil, context: context)
+        let existing = DedupeService.findExistingAttendee(email: emailText.isEmpty ? nil : emailText, phone: nil, context: context)
         let attendee: Attendee = existing ?? {
             let a = Attendee()
             context.insert(a)
             return a
         }()
 
-        if showName { attendee.fullName = fullName.trimmingCharacters(in: .whitespacesAndNewlines) }
-        if showTitle || showRole { attendee.title = roleOrTitle.trimmingCharacters(in: .whitespacesAndNewlines) }
-        if showCompany { attendee.company = company.trimmingCharacters(in: .whitespacesAndNewlines) }
-        if showEmail { attendee.email = email.trimmingCharacters(in: .whitespacesAndNewlines) }
-        // Phone/Website/LinkedIn removed from capture
+        attendee.title = titleText.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        attendee.fullName = nameText.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        attendee.role = roleText.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        attendee.company = companyText.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        attendee.department = departmentText.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        attendee.email = emailText.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        attendee.other = otherText.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
 
-        attendee.attendeeType = showAttendeeType ? attendeeType.rawValue : attendee.attendeeType
+        attendee.attendeeType = attendeeType.rawValue
 
         let convo = Conversation(event: event, attendee: attendee, notes: notes, followUp: followUp)
         convo.createdAt = occurredAt
@@ -150,10 +140,13 @@ struct NewConversationView: View {
     }
 
     private func resetForm() {
-        fullName = ""
-        roleOrTitle = ""
-        company = ""
-        email = ""
+        titleText = ""
+        nameText = ""
+        roleText = ""
+        companyText = ""
+        departmentText = ""
+        emailText = ""
+        otherText = ""
         notes = ""
         followUp = false
         occurredAt = Date()

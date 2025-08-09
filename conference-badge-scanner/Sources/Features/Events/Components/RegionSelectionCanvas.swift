@@ -121,7 +121,8 @@ struct RegionSelectionCanvas: View {
         case .company: return .green
         case .title: return .orange
         case .role: return .purple
-        case .attendeeType: return .pink
+        case .department: return .pink
+        case .email: return .teal
         case .other: return .gray
         }
     }

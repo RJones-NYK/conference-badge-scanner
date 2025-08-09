@@ -137,6 +137,7 @@ struct BadgeConfigurationView: View {
         }
         .sheet(isPresented: $showingScanner) {
             DocumentScannerView { image, _ in
+                // Image is already preprocessed by DocumentScannerView
                 templateImage = image
                 showingScanner = false
             } onCancel: {

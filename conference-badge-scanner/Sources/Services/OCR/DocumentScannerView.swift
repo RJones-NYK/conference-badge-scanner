@@ -37,7 +37,8 @@ struct DocumentScannerView: UIViewControllerRepresentable {
         func documentCameraViewController(_ controller: VNDocumentCameraViewController, didFinishWith scan: VNDocumentCameraScan) {
             guard scan.pageCount > 0 else { onCancel(); return }
             // Use the first page by default
-            let image = scan.imageOfPage(at: 0)
+            let raw = scan.imageOfPage(at: 0)
+            let image = ImagePreprocessor.preprocess(image: raw, enablePerspectiveCorrection: true)
             OCRProcessor.recognizeText(in: image) { text in
                 self.onScanned(image, text)
             }

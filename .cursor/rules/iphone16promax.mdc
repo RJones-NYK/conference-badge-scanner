@@ -1,4 +1,5 @@
 ---
+description: when running the build for the mobile app
 alwaysApply: false
 ---
 When building the app please use a iphone 16 pro max
