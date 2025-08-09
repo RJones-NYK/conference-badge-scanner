@@ -14,6 +14,7 @@ struct ConversationsListView: View {
     @State private var confirmDelete = false
 
     @Query(sort: \Conversation.createdAt, order: .reverse) private var conversations: [Conversation]
+    @State private var search: String = ""
 
     // Extracted bindings to simplify type inference in Pickers
     private var selectedEventBinding: Binding<Event?> {
@@ -31,17 +32,23 @@ struct ConversationsListView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Event selector
+        Group {
             if events.isEmpty {
                 ContentUnavailableView("No events", systemImage: "calendar", description: Text("Create an event first on the Events tab."))
             } else {
-                eventPicker
-
                 conversationsList
+                    .listStyle(.insetGrouped)
             }
         }
         .navigationTitle("Conversations")
+        .toolbarTitleMenu {
+            Picker("Event", selection: $selectedEvent) {
+                Text("All Events").tag(nil as Event?)
+                ForEach(events) { event in
+                    Text(event.name).tag(event as Event?)
+                }
+            }
+        }
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 Button(isSelecting ? "Cancel" : "Select") {
@@ -85,11 +92,9 @@ struct ConversationsListView: View {
                 }
             }
         }
+        .searchable(text: $search, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search name, company, notes")
         .navigationDestination(for: Conversation.self) { convo in
             ConversationDetailView(conversation: convo)
-        }
-        .onAppear {
-            if selectedEvent == nil { selectedEvent = events.first }
         }
         .sheet(isPresented: $showingNewConversation) {
             if let event = selectedEvent ?? events.first {
@@ -124,8 +129,38 @@ struct ConversationsListView: View {
 
     private var conversationsList: some View {
         List {
-            ForEach(filteredConversations) { convo in
-                conversationRow(convo)
+            if !events.isEmpty {
+                Section {
+                    Picker("Event", selection: $selectedEvent) {
+                        Text("All Events").tag(nil as Event?)
+                        ForEach(events) { event in
+                            Text(event.name).tag(event as Event?)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                }
+            }
+            Section {
+                ForEach(filteredConversations) { convo in
+                    conversationRow(convo)
+                }
+            }
+        }
+        .overlay {
+            if filteredConversations.isEmpty {
+                if selectedEvent != nil {
+                    ContentUnavailableView(
+                        "No Conversations",
+                        systemImage: "text.bubble",
+                        description: Text("No conversations for this event.\nUse the Conversations title menu to switch to ‘All Events’ or tap New.")
+                    )
+                } else {
+                    ContentUnavailableView(
+                        "No Conversations",
+                        systemImage: "text.bubble",
+                        description: Text("Tap New to add your first conversation.")
+                    )
+                }
             }
         }
     }
@@ -182,6 +217,12 @@ struct ConversationsListView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
                         Text(convo.attendee?.fullName ?? "Unknown").font(.headline)
+                        if convo.followUp {
+                            Image(systemName: "flag.fill")
+                                .symbolRenderingMode(.palette)
+                                .foregroundStyle(.red, .clear)
+                                .accessibilityLabel("Needs follow-up")
+                        }
                         Spacer()
                         Image(systemName: "chevron.right").foregroundStyle(.tertiary)
                     }
@@ -275,10 +316,22 @@ struct ConversationsListView: View {
     private var filteredConversations: [Conversation] {
         let base = conversations
         let active = base.filter { $0.deletedAt == nil }
+        let scoped: [Conversation]
         if let event = selectedEvent {
-            return active.filter { $0.event?.persistentModelID == event.persistentModelID }
+            scoped = active.filter { $0.event?.persistentModelID == event.persistentModelID }
+        } else {
+            scoped = active
         }
-        return active
+        if !search.isEmpty {
+            let q = search.lowercased()
+            return scoped.filter {
+                let name = $0.attendee?.fullName?.lowercased() ?? ""
+                let company = $0.attendee?.company?.lowercased() ?? ""
+                let notes = $0.notes.lowercased()
+                return name.contains(q) || company.contains(q) || notes.contains(q)
+            }
+        }
+        return scoped
     }
 
     private func toggleSelection(for convo: Conversation) {

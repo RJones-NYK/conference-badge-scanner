@@ -35,6 +35,16 @@ struct EventListView: View {
             }
             .onDelete(perform: delete)
         }
+        .listStyle(.insetGrouped)
+        .overlay {
+            if events.isEmpty {
+                ContentUnavailableView(
+                    "No Events",
+                    systemImage: "calendar.badge.plus",
+                    description: Text("Tap + to add your first event.")
+                )
+            }
+        }
         .navigationTitle("Events")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {

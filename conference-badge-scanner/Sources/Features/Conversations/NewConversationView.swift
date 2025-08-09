@@ -6,7 +6,10 @@ struct NewConversationView: View {
     @Environment(\.dismiss) private var dismiss
 
     let event: Event
+    // Optional completion action (e.g., to close a presenting sheet)
     let onComplete: (() -> Void)?
+    // Controls whether the view should dismiss after save. When false, the form resets for rapid entry.
+    let dismissOnSave: Bool
 
     @State private var fullName: String = ""
     @State private var roleOrTitle: String = ""
@@ -42,6 +45,8 @@ struct NewConversationView: View {
                             Text("Scan Badge with Camera")
                         }
                     }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
                 }
 
                 Section("Details") {
@@ -75,16 +80,7 @@ struct NewConversationView: View {
                     DatePicker("Date & Time", selection: $occurredAt, displayedComponents: [.date, .hourAndMinute])
                 }
 
-                if showAttendeeType {
-                    Section("Attendee Type") {
-                        Picker("Type", selection: $attendeeType) {
-                            ForEach(AttendeeType.allCases) { t in
-                                Text(t.displayName).tag(t)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                    }
-                }
+                // Attendee type is shown as the chip picker in Details above when enabled
             }
             .navigationTitle("New Conversation")
             .toolbar {
@@ -105,6 +101,12 @@ struct NewConversationView: View {
                 .presentationDragIndicator(.visible)
             }
         }
+    }
+
+    init(event: Event, onComplete: (() -> Void)? = nil, dismissOnSave: Bool = true) {
+        self.event = event
+        self.onComplete = onComplete
+        self.dismissOnSave = dismissOnSave
     }
 
     private var canSave: Bool {
@@ -140,7 +142,23 @@ struct NewConversationView: View {
         context.insert(convo)
 
         onComplete?()
-        dismiss()
+        if dismissOnSave {
+            dismiss()
+        } else {
+            resetForm()
+        }
+    }
+
+    private func resetForm() {
+        fullName = ""
+        roleOrTitle = ""
+        company = ""
+        email = ""
+        notes = ""
+        followUp = false
+        occurredAt = Date()
+        attendeeType = .attendee
+        showingScanner = false
     }
 }
 
