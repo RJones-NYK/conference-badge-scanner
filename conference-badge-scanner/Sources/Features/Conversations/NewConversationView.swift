@@ -90,7 +90,7 @@ struct NewConversationView: View {
                 }
             }
             .sheet(isPresented: $showingScanner) {
-                ScanBadgeView { raw in
+                ScanBadgeView(event: event) { raw in
                     let parsed = TextParsingService.parse(from: raw)
                     apply(parsed)
                     showingScanner = false

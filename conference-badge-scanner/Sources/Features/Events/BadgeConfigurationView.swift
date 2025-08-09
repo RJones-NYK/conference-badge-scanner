@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct BadgeConfigurationView: View {
     @Environment(\.dismiss) private var dismiss
@@ -6,11 +7,16 @@ struct BadgeConfigurationView: View {
     let event: Event
 
     @State private var selectedFields: Set<BadgeField> = []
+    @State private var templateImage: UIImage? = nil
+    @State private var regions: [String: NormalizedRect] = [:]
+    @State private var showingScanner = false
+    @State private var showingRegionEditor = false
 
     var body: some View {
         NavigationStack {
             Form {
                 Section("Badge Fields") { badgeFieldsGrid }
+                Section("Template") { templateSection }
                 Section("Preview") { badgePreview }
             }
             .navigationTitle("Configure Badge")
@@ -22,6 +28,15 @@ struct BadgeConfigurationView: View {
                     Button("Save") {
                         let ordered = BadgeField.allCases.filter { selectedFields.contains($0) }
                         event.badgeFieldKeys = ordered.map { $0.rawValue }
+                        // Persist template image and regions
+                        if let img = templateImage, let data = img.jpegData(compressionQuality: 0.85) {
+                            event.badgeTemplateImageData = data
+                        }
+                        // Replace badgeRegions with current selections
+                        event.badgeRegions = regions.compactMap { key, rect in
+                            guard let field = BadgeField(rawValue: key), selectedFields.contains(field) else { return nil }
+                            return BadgeRegion(fieldKey: key, rect: rect)
+                        }
                         dismiss()
                     }
                 }
@@ -32,6 +47,15 @@ struct BadgeConfigurationView: View {
                     selectedFields = Set(BadgeField.defaultSelection)
                 } else {
                     selectedFields = current
+                }
+                if let data = event.badgeTemplateImageData, let img = UIImage(data: data) {
+                    templateImage = img
+                }
+                regions = event.badgeFieldRegionsMap
+            }
+            .fullScreenCover(isPresented: $showingRegionEditor) {
+                if let image = templateImage {
+                    RegionEditorView(image: image, fields: Array(selectedFields), regions: $regions)
                 }
             }
         }
@@ -73,6 +97,53 @@ struct BadgeConfigurationView: View {
             .padding(16)
         }
         .frame(maxWidth: .infinity, minHeight: 140)
+    }
+
+    private var templateSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if let image = templateImage {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxHeight: 160)
+            } else {
+                Text("No template image. Add one by scanning a badge.")
+                    .foregroundStyle(.secondary)
+            }
+            HStack {
+                Button {
+                    showingScanner = true
+                } label: {
+                    Label(templateImage == nil ? "Scan Template Badge" : "Rescan Template", systemImage: "doc.viewfinder")
+                }
+                if templateImage != nil {
+                    Button(role: .destructive) {
+                        templateImage = nil
+                        regions.removeAll()
+                    } label: {
+                        Label("Remove", systemImage: "trash")
+                    }
+                }
+            }
+            if templateImage != nil {
+                Button {
+                    showingRegionEditor = true
+                } label: {
+                    Label("Define Regions", systemImage: "rectangle.dashed.badge.record")
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+            }
+        }
+        .sheet(isPresented: $showingScanner) {
+            DocumentScannerView { image, _ in
+                templateImage = image
+                showingScanner = false
+            } onCancel: {
+                showingScanner = false
+            }
+            .ignoresSafeArea()
+        }
     }
 }
 

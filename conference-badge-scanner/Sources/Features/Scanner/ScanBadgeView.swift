@@ -1,13 +1,16 @@
 import SwiftUI
 import VisionKit
+import SwiftData
 
 struct ScanBadgeView: View {
     @Environment(\.dismiss) private var dismiss
+    let event: Event?
     var onComplete: (String) -> Void
     var onCancel: () -> Void
 
     @State private var buffer: [String] = []
     @State private var useDocumentScanner = true
+    @State private var scannedImage: UIImage? = nil
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -15,9 +18,25 @@ struct ScanBadgeView: View {
                 if useDocumentScanner, VNDocumentCameraViewController.isSupported {
                     DocumentScannerView { image, text in
                         // Prefer document scanner OCR result
+                        scannedImage = image
                         buffer = text.components(separatedBy: "\n").filter { !$0.isEmpty }
-                        onComplete(text)
-                        dismiss()
+                        // If event provides template regions, try region OCR merge
+                        if let img = scannedImage, let ev = event {
+                            let map = ev.badgeFieldRegionsMap
+                            guard !map.isEmpty else {
+                                onComplete(text)
+                                dismiss()
+                                return
+                            }
+                            OCRProcessor.recognizeText(in: img, regionsByKey: map) { mapped in
+                                let merged = mergeRegionText(mapped: mapped, fallback: text)
+                                onComplete(merged)
+                                dismiss()
+                            }
+                        } else {
+                            onComplete(text)
+                            dismiss()
+                        }
                     } onCancel: {
                         onCancel();
                         dismiss()
@@ -81,6 +100,19 @@ struct ScanBadgeView: View {
             .padding(.vertical, 8)
             .background(.thinMaterial)
         }
+    }
+
+    private func mergeRegionText(mapped: [String: String], fallback: String) -> String {
+        // Build a simple ordered output using BadgeField ordering when possible
+        let orderedKeys = BadgeField.allCases.map { $0.rawValue }
+        var lines: [String] = []
+        for key in orderedKeys {
+            if let val = mapped[key], !val.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                lines.append(val)
+            }
+        }
+        if lines.isEmpty { return fallback }
+        return lines.joined(separator: "\n")
     }
 }
 
