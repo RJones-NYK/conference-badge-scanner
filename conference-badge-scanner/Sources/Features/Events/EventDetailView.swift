@@ -18,6 +18,21 @@ struct EventDetailView: View {
     @State private var confirmDelete = false
     @State private var showingBadgeConfig = false
 
+    private var hasChanges: Bool {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedDetails = details.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedWebsite = website.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedLocation = location.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if trimmedName != event.name { return true }
+        if start != event.startDate { return true }
+        if end != (event.endDate ?? start) { return true }
+        if (trimmedDetails.isEmpty ? nil : trimmedDetails) != event.details { return true }
+        if (trimmedWebsite.isEmpty ? nil : trimmedWebsite) != event.website { return true }
+        if (trimmedLocation.isEmpty ? nil : trimmedLocation) != event.location { return true }
+        return false
+    }
+
     var body: some View {
         Form {
             if !isEditing {
@@ -42,30 +57,45 @@ struct EventDetailView: View {
                 }
             }
             Section("Event Name") {
-                TextField("Event name", text: $name)
-                    .disabled(!isEditing)
+                if isEditing {
+                    ClearableTextField("Event name", text: $name)
+                } else {
+                    LabeledContent("Event Name", value: name)
+                }
             }
 
             Section("Schedule") {
-                DatePicker("Start", selection: $start, displayedComponents: [.date])
-                    .disabled(!isEditing)
-                DatePicker("End", selection: Binding(get: { max(end, start) }, set: { end = max($0, start) }), displayedComponents: [.date])
-                    .disabled(!isEditing)
+                if isEditing {
+                    DatePicker("Start", selection: $start, displayedComponents: [.date])
+                    DatePicker("End", selection: Binding(get: { max(end, start) }, set: { end = max($0, start) }), displayedComponents: [.date])
+                } else {
+                    LabeledContent("Start", value: start.formatted(.dateTime.month().day().year()))
+                    if let endDate = event.endDate {
+                        LabeledContent("End", value: endDate.formatted(.dateTime.month().day().year()))
+                    }
+                }
             }
 
             Section("Details") {
-                TextField("Details", text: $details, axis: .vertical)
-                    .lineLimit(3, reservesSpace: true)
-                    .disabled(!isEditing)
+                if isEditing {
+                    ClearableTextField("Details", text: $details, axis: .vertical)
+                        .lineLimit(3, reservesSpace: true)
+                } else {
+                    if details.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Text("None").foregroundStyle(.secondary)
+                    } else {
+                        Text(details)
+                    }
+                }
             }
 
             Section("Website & Location") {
                 if isEditing {
-                    TextField("Website", text: $website)
+                    ClearableTextField("Website", text: $website)
                         .keyboardType(.URL)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled(true)
-                    TextField("Location (address)", text: $location)
+                    ClearableTextField("Location (address)", text: $location)
                 } else {
                     if let url = normalizedWebsiteURL() {
                         Link(destination: url) {
@@ -131,6 +161,7 @@ struct EventDetailView: View {
                     }
                     isEditing.toggle()
                 }
+                .disabled(isEditing && !hasChanges)
             }
         }
         .onAppear(perform: loadFromEvent)

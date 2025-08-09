@@ -21,26 +21,65 @@ struct ConversationDetailView: View {
     @State private var attendeeType: AttendeeType = .attendee
     @State private var confirmDelete = false
 
+    private var hasChanges: Bool {
+        let trimmedFullName = fullName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedCompany = company.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if trimmedFullName != (conversation.attendee?.fullName ?? "") { return true }
+        if trimmedTitle != (conversation.attendee?.title ?? "") { return true }
+        if trimmedCompany != (conversation.attendee?.company ?? "") { return true }
+        if trimmedEmail != (conversation.attendee?.email ?? "") { return true }
+        if trimmedNotes != conversation.notes { return true }
+        if createdAt != conversation.createdAt { return true }
+        if followUp != conversation.followUp { return true }
+        if attendeeType.rawValue != (conversation.attendee?.attendeeType ?? AttendeeType.attendee.rawValue) { return true }
+        return false
+    }
+
     var body: some View {
         Form {
             Section("Attendee") {
-                TextField("Name", text: $fullName).disabled(!isEditing)
-                TextField("Title", text: $title).disabled(!isEditing)
-                TextField("Company", text: $company).disabled(!isEditing)
-                TextField("Email", text: $email).disabled(!isEditing)
+                if isEditing {
+                    ClearableTextField("Name", text: $fullName)
+                    ClearableTextField("Title", text: $title)
+                    ClearableTextField("Company", text: $company)
+                    ClearableTextField("Email", text: $email)
+                } else {
+                    LabeledContent("Name", value: fullName)
+                    LabeledContent("Title", value: title)
+                    LabeledContent("Company", value: company)
+                    LabeledContent("Email", value: email)
+                }
             }
             Section("Notes") {
-                TextField("Notes", text: $notes, axis: .vertical)
-                    .lineLimit(6, reservesSpace: true)
-                    .disabled(!isEditing)
+                if isEditing {
+                    ClearableTextField("Notes", text: $notes, axis: .vertical)
+                        .lineLimit(6, reservesSpace: true)
+                } else {
+                    if notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Text("None").foregroundStyle(.secondary)
+                    } else {
+                        Text(notes)
+                    }
+                }
             }
             Section("When") {
-                DatePicker("Date & Time", selection: $createdAt, displayedComponents: [.date, .hourAndMinute])
-                    .disabled(!isEditing)
+                if isEditing {
+                    DatePicker("Date & Time", selection: $createdAt, displayedComponents: [.date, .hourAndMinute])
+                } else {
+                    LabeledContent("Date & Time", value: createdAt.formatted(date: .abbreviated, time: .shortened))
+                }
             }
             Section("Details") {
                 AttendeeTypePickerView(selection: $attendeeType, isEnabled: isEditing)
-                Toggle("Needs follow-up", isOn: $followUp).disabled(!isEditing)
+                if isEditing {
+                    Toggle("Needs follow-up", isOn: $followUp)
+                } else {
+                    LabeledContent("Needs follow-up", value: followUp ? "Yes" : "No")
+                }
             }
             Section {
                 Button(role: .destructive) {
@@ -60,6 +99,7 @@ struct ConversationDetailView: View {
                     if isEditing { save() }
                     isEditing.toggle()
                 }
+                .disabled(isEditing && !hasChanges)
             }
         }
         .onAppear(perform: load)
