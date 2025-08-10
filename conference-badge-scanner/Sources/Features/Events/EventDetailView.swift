@@ -18,54 +18,131 @@ struct EventDetailView: View {
     @State private var confirmDelete = false
     @State private var showingBadgeConfig = false
 
+    private let iconColumnWidth: CGFloat = 20
+    private let iconSize: CGFloat = 16
+
+    private var hasChanges: Bool {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedDetails = details.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedWebsite = website.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedLocation = location.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if trimmedName != event.name { return true }
+        if start != event.startDate { return true }
+        if end != (event.endDate ?? start) { return true }
+        if (trimmedDetails.isEmpty ? nil : trimmedDetails) != event.details { return true }
+        if (trimmedWebsite.isEmpty ? nil : trimmedWebsite) != event.website { return true }
+        if (trimmedLocation.isEmpty ? nil : trimmedLocation) != event.location { return true }
+        return false
+    }
+
     var body: some View {
-        Form {
+        VStack(spacing: 12) {
+            Form {
             if !isEditing {
                 Section {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Label(event.name, systemImage: "calendar")
-                            .font(.headline)
-                        HStack(spacing: 6) {
-                            Text(start, format: .dateTime.month().day().year())
-                            if let end = event.endDate {
-                                Text("–")
-                                Text(end, format: .dateTime.month().day().year())
-                            }
+                    VStack(alignment: .leading, spacing: 6) {
+                        // Event name row (icon + text), centered and uniform icon sizing
+                        HStack(alignment: .center, spacing: 6) {
+                            Image(systemName: "lanyardcard")
+                                .foregroundStyle(.blue)
+                                .font(.system(size: iconSize))
+                                .frame(width: iconColumnWidth, alignment: .center)
+                            Text(event.name)
+                                .font(.body)
                         }
-                        .foregroundStyle(.secondary)
-                        if let loc = event.location, !loc.isEmpty {
-                            Label(loc, systemImage: "mappin.and.ellipse")
+
+                        // Date row with calendar icon left, centered and uniform icon sizing
+                        HStack(alignment: .center, spacing: 6) {
+                            Image(systemName: "calendar")
+                                .foregroundStyle(.red)
+                                .font(.system(size: iconSize))
+                                .frame(width: iconColumnWidth, alignment: .center)
+                            Text(dateRangeDisplay)
+                                .font(.body)
                                 .foregroundStyle(.secondary)
                         }
+
+                        // Location row with existing symbol, centered and uniform icon sizing
+                        if let loc = event.location, !loc.isEmpty {
+                            HStack(alignment: .center, spacing: 6) {
+                                Image(systemName: "mappin.and.ellipse")
+                                    .foregroundStyle(.green)
+                                    .font(.system(size: iconSize))
+                                    .frame(width: iconColumnWidth, alignment: .center)
+                                Text(loc)
+                                    .font(.body)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
                     }
-                    .padding(.vertical, 4)
+                    .padding(.vertical, 2)
                 }
             }
             Section("Event Name") {
-                TextField("Event name", text: $name)
-                    .disabled(!isEditing)
+                if isEditing {
+                    ClearableTextField("Event name", text: $name)
+                } else {
+                    LabeledContent("Event Name", value: name)
+                }
             }
 
             Section("Schedule") {
-                DatePicker("Start", selection: $start, displayedComponents: [.date])
-                    .disabled(!isEditing)
-                DatePicker("End", selection: Binding(get: { max(end, start) }, set: { end = max($0, start) }), displayedComponents: [.date])
-                    .disabled(!isEditing)
+                if isEditing {
+                    if #available(iOS 16.0, *) {
+                        let binding = Binding<DateInterval?>(
+                            get: {
+                                DateInterval(start: start, end: end)
+                            },
+                            set: { newValue in
+                                if let v = newValue {
+                                    start = v.start
+                                    end = max(v.end, v.start)
+                                }
+                            }
+                        )
+                        GroupBox {
+                            CalendarRangePicker(range: binding)
+                                .scaleEffect(0.92)
+                                .contentShape(Rectangle())
+                                .frame(maxWidth: .infinity, alignment: .center)
+                                .padding(.vertical, 2)
+                        }
+                        .listRowInsets(EdgeInsets(top: 2, leading: 28, bottom: 2, trailing: 28))
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
+                    } else {
+                        DatePicker("Start", selection: $start, displayedComponents: [.date])
+                        DatePicker("End", selection: Binding(get: { max(end, start) }, set: { end = max($0, start) }), displayedComponents: [.date])
+                    }
+                } else {
+                    LabeledContent("Start", value: start.formatted(.dateTime.month().day().year()))
+                    if let endDate = event.endDate {
+                        LabeledContent("End", value: endDate.formatted(.dateTime.month().day().year()))
+                    }
+                }
             }
 
             Section("Details") {
-                TextField("Details", text: $details, axis: .vertical)
-                    .lineLimit(3, reservesSpace: true)
-                    .disabled(!isEditing)
+                if isEditing {
+                    ClearableTextField("Details", text: $details, axis: .vertical)
+                        .lineLimit(3, reservesSpace: true)
+                } else {
+                    if details.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Text("None").foregroundStyle(.secondary)
+                    } else {
+                        Text(details)
+                    }
+                }
             }
 
             Section("Website & Location") {
                 if isEditing {
-                    TextField("Website", text: $website)
+                    ClearableTextField("Website", text: $website)
                         .keyboardType(.URL)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled(true)
-                    TextField("Location (address)", text: $location)
+                    ClearableTextField("Location (address)", text: $location)
                 } else {
                     if let url = normalizedWebsiteURL() {
                         Link(destination: url) {
@@ -85,26 +162,29 @@ struct EventDetailView: View {
                 }
             }
 
-            Section {
-                HStack {
-                    Spacer()
-                    Button {
-                        showingBadgeConfig = true
-                    } label: {
-                        VStack(spacing: 6) {
-                            Image(systemName: "person.text.rectangle.fill")
-                                .font(.system(size: 36, weight: .semibold))
-                            Text("Configure Badge")
-                                .font(.headline)
-                        }
-                        .padding(.vertical, 8)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                    .accessibilityLabel("Configure Badge")
-                    Spacer()
-                }
             }
+
+            // Standalone Configure Badge button outside the form
+            HStack {
+                Spacer()
+                Button {
+                    showingBadgeConfig = true
+                } label: {
+                    VStack(spacing: 6) {
+                        Image(systemName: "person.text.rectangle.fill")
+                            .font(.system(size: 36, weight: .semibold))
+                        Text("Configure Badge")
+                            .font(.headline)
+                    }
+                    .padding(.vertical, 8)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .accessibilityLabel("Configure Badge")
+                Spacer()
+            }
+            .padding(.horizontal)
+            .padding(.top, 4)
 
             Section {
                 Button(role: .destructive) {
@@ -114,7 +194,7 @@ struct EventDetailView: View {
                 }
             }
         }
-        .navigationTitle(event.name)
+        .navigationTitle("Event Details")
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 if isEditing {
@@ -131,6 +211,7 @@ struct EventDetailView: View {
                     }
                     isEditing.toggle()
                 }
+                .disabled(isEditing && !hasChanges)
             }
         }
         .onAppear(perform: loadFromEvent)
@@ -183,6 +264,15 @@ struct EventDetailView: View {
         guard !q.isEmpty else { return nil }
         let esc = q.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? q
         return URL(string: "http://maps.apple.com/?q=\(esc)")
+    }
+
+    private var dateRangeDisplay: String {
+        let startText = start.formatted(.dateTime.month().day().year())
+        if let endDate = event.endDate {
+            let endText = endDate.formatted(.dateTime.month().day().year())
+            return "\(startText) – \(endText)"
+        }
+        return startText
     }
 }
 

@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct BadgeConfigurationView: View {
     @Environment(\.dismiss) private var dismiss
@@ -6,11 +7,19 @@ struct BadgeConfigurationView: View {
     let event: Event
 
     @State private var selectedFields: Set<BadgeField> = []
+    @State private var templateImage: UIImage? = nil
+    @State private var regions: [String: NormalizedRect] = [:]
+    @State private var showingScanner = false
+    @State private var showingRegionEditor = false
+    @State private var showingFullImage = false
+    @State private var ocrPreview: [String: String] = [:]
+    @State private var isOCRRunning = false
 
     var body: some View {
         NavigationStack {
             Form {
                 Section("Badge Fields") { badgeFieldsGrid }
+                Section("Template") { templateSection }
                 Section("Preview") { badgePreview }
             }
             .navigationTitle("Configure Badge")
@@ -22,6 +31,15 @@ struct BadgeConfigurationView: View {
                     Button("Save") {
                         let ordered = BadgeField.allCases.filter { selectedFields.contains($0) }
                         event.badgeFieldKeys = ordered.map { $0.rawValue }
+                        // Persist template image and regions
+                        if let img = templateImage, let data = img.jpegData(compressionQuality: 0.85) {
+                            event.badgeTemplateImageData = data
+                        }
+                        // Replace badgeRegions with current selections
+                        event.badgeRegions = regions.compactMap { key, rect in
+                            guard let field = BadgeField(rawValue: key), selectedFields.contains(field) else { return nil }
+                            return BadgeRegion(fieldKey: key, rect: rect)
+                        }
                         dismiss()
                     }
                 }
@@ -29,10 +47,33 @@ struct BadgeConfigurationView: View {
             .onAppear {
                 let current = Set(event.badgeFieldKeys.compactMap(BadgeField.init(rawValue:)))
                 if current.isEmpty {
-                    selectedFields = Set(BadgeField.defaultSelection)
+                    // Auto-select all by default, user can deselect
+                    selectedFields = Set(BadgeField.allCases)
                 } else {
                     selectedFields = current
                 }
+                if let data = event.badgeTemplateImageData, let img = UIImage(data: data) {
+                    templateImage = img
+                }
+                regions = event.badgeFieldRegionsMap
+                updatePreviewOCR()
+            }
+            .fullScreenCover(isPresented: $showingRegionEditor) {
+                if let image = templateImage {
+                    RegionEditorView(image: image, fields: Array(selectedFields), regions: $regions)
+                }
+            }
+            .fullScreenCover(isPresented: $showingFullImage) {
+                ZStack {
+                    Color.black.ignoresSafeArea()
+                    if let image = templateImage {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFit()
+                            .ignoresSafeArea()
+                    }
+                }
+                .onTapGesture { showingFullImage = false }
             }
         }
     }
@@ -56,23 +97,174 @@ struct BadgeConfigurationView: View {
     }
 
     private var badgePreview: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(.ultraThinMaterial)
-            VStack(spacing: 8) {
-                Text("Conference Badge").font(.headline)
-                ForEach(BadgeField.allCases.filter { selectedFields.contains($0) }) { field in
-                    Text(field.displayName)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+        Group {
+            if let image = templateImage, regions.isEmpty {
+                // Show the scanned badge until regions are defined
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: .infinity)
+                    .cornerRadius(12)
+            } else if !regions.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("Extracted from Template").font(.headline)
+                        if isOCRRunning { ProgressView().scaleEffect(0.8) }
+                    }
+                    let ordered = BadgeField.allCases.filter { selectedFields.contains($0) }
+                    if ordered.isEmpty {
+                        Text("No fields selected").foregroundStyle(.secondary)
+                    } else {
+                        ForEach(ordered) { field in
+                            let value = (ocrPreview[field.rawValue] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                            if !value.isEmpty {
+                                LabeledContent(field.displayName, value: value)
+                            }
+                        }
+                    }
                 }
-                if selectedFields.isEmpty {
-                    Text("No fields selected").foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(.ultraThinMaterial)
+                    VStack(spacing: 8) {
+                        Text("Conference Badge").font(.headline)
+                        ForEach(BadgeField.allCases.filter { selectedFields.contains($0) }) { field in
+                            Text(field.displayName)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                        if selectedFields.isEmpty {
+                            Text("No fields selected").foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(16)
+                }
+                .frame(maxWidth: .infinity, minHeight: 140)
+            }
+        }
+    }
+
+    private var templateSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if let image = templateImage {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxHeight: 160)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .onTapGesture { showingFullImage = true }
+            } else {
+                VStack(spacing: 12) {
+                    Text("No template image, please scan using the button below")
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
+                    HStack { Spacer()
+                        Button { showingScanner = true } label: {
+                            Label("Scan", systemImage: "doc.viewfinder")
+                                .symbolRenderingMode(.monochrome)
+                                .foregroundStyle(.white)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        Spacer() }
                 }
             }
-            .padding(16)
+            if templateImage != nil {
+                HStack(spacing: 24) {
+                    // Re-Scan (Blue)
+                    Button {
+                        showingScanner = true
+                    } label: {
+                        VStack(spacing: 8) {
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .fill(Color.blue)
+                                .frame(width: 56, height: 56)
+                                .overlay(
+                                    Image(systemName: "doc.viewfinder")
+                                        .font(.system(size: 24, weight: .semibold))
+                                        .symbolRenderingMode(.monochrome)
+                                        .foregroundStyle(.white)
+                                )
+                            Text("Re-Scan")
+                                .font(.caption)
+                        }
+                    }
+                    .buttonStyle(.plain)
+
+                    // Format (Green)
+                    Button {
+                        showingRegionEditor = true
+                    } label: {
+                        VStack(spacing: 8) {
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .fill(Color.green)
+                                .frame(width: 56, height: 56)
+                                .overlay(
+                                    Image(systemName: "textformat.characters")
+                                        .font(.system(size: 24, weight: .semibold))
+                                        .symbolRenderingMode(.monochrome)
+                                        .foregroundStyle(.white)
+                                )
+                            Text("Format")
+                                .font(.caption)
+                        }
+                    }
+                    .buttonStyle(.plain)
+
+                    // Delete (Red)
+                    Button(role: .destructive) {
+                        templateImage = nil
+                        regions.removeAll()
+                        ocrPreview.removeAll()
+                    } label: {
+                        VStack(spacing: 8) {
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .fill(Color.red)
+                                .frame(width: 56, height: 56)
+                                .overlay(
+                                    Image(systemName: "trash")
+                                        .font(.system(size: 24, weight: .semibold))
+                                        .symbolRenderingMode(.monochrome)
+                                        .foregroundStyle(.white)
+                                )
+                            Text("Delete")
+                                .font(.caption)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.top, 4)
+            }
         }
-        .frame(maxWidth: .infinity, minHeight: 140)
+        .sheet(isPresented: $showingScanner) {
+            // For template capture we want the full page without any perspective crop.
+            DocumentScannerView(onScanned: { image, _ in
+                // Image is already preprocessed by DocumentScannerView
+                templateImage = image
+                showingScanner = false
+                updatePreviewOCR()
+            }, onCancel: {
+                showingScanner = false
+            }, enablePerspectiveCorrection: false)
+            .ignoresSafeArea()
+        }
+        .onChange(of: regions) { _, _ in updatePreviewOCR() }
+        .onChange(of: templateImage) { _, _ in updatePreviewOCR() }
+    }
+
+    private func updatePreviewOCR() {
+        guard let image = templateImage, !regions.isEmpty else {
+            ocrPreview = [:]
+            return
+        }
+        isOCRRunning = true
+        OCRProcessor.recognizeText(in: image, regionsByKey: regions) { mapped in
+            self.ocrPreview = mapped
+            self.isOCRRunning = false
+        }
     }
 }
 

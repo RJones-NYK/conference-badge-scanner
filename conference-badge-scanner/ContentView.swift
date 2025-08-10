@@ -9,6 +9,7 @@ import SwiftUI
 import SwiftData
 
 struct ContentView: View {
+    @AppStorage(AppTheme.storageKey) private var appThemeRaw: String = AppTheme.system.rawValue
     @Query(sort: \Event.startDate, order: .reverse) private var events: [Event]
     var body: some View {
         TabView {
@@ -16,6 +17,11 @@ struct ContentView: View {
                 EventListView()
             }
             .tabItem { Label("Events", systemImage: "calendar") }
+
+            NavigationStack {
+                ConversationsListView()
+            }
+            .tabItem { Label("Conversations", systemImage: "text.bubble") }
 
             Group {
                 if let event = events.first {
@@ -28,13 +34,19 @@ struct ContentView: View {
                     )
                 }
             }
-            .tabItem { Label("New Conversation", systemImage: "square.and.pencil") }
+            .tabItem { Label("Capture", systemImage: "camera.viewfinder") }
 
             NavigationStack {
-                ConversationsListView()
+                AnalyticsView()
             }
-            .tabItem { Label("Conversations", systemImage: "text.bubble") }
+            .tabItem { Label("Analytics", systemImage: "chart.bar") }
+
+            NavigationStack {
+                SettingsView()
+            }
+            .tabItem { Label("Settings", systemImage: "gearshape") }
         }
+        .preferredColorScheme(AppTheme(rawValue: appThemeRaw)?.colorScheme)
     }
 }
 

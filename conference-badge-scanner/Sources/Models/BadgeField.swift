@@ -5,7 +5,8 @@ enum BadgeField: String, CaseIterable, Identifiable, Codable {
     case name
     case role
     case company
-    case attendeeType
+    case department
+    case email
     case other
 
     var id: String { rawValue }
@@ -16,13 +17,14 @@ enum BadgeField: String, CaseIterable, Identifiable, Codable {
         case .name: return "Name"
         case .role: return "Role"
         case .company: return "Company"
-        case .attendeeType: return "Attendee Type"
+        case .department: return "Department"
+        case .email: return "Email"
         case .other: return "Other"
         }
     }
 
     static var defaultSelection: [BadgeField] {
-        return [.name, .company]
+        return Array(BadgeField.allCases)
     }
 
     static var defaultKeys: [String] { defaultSelection.map { $0.rawValue } }

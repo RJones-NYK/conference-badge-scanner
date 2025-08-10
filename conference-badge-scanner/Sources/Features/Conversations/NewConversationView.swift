@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UIKit
 
 struct NewConversationView: View {
     @Environment(\.modelContext) private var context
@@ -12,9 +13,13 @@ struct NewConversationView: View {
     let dismissOnSave: Bool
 
     @State private var fullName: String = ""
-    @State private var roleOrTitle: String = ""
-    @State private var company: String = ""
-    @State private var email: String = ""
+    @State private var titleText: String = ""
+    @State private var nameText: String = ""
+    @State private var roleText: String = ""
+    @State private var companyText: String = ""
+    @State private var departmentText: String = ""
+    @State private var emailText: String = ""
+    @State private var otherText: String = ""
     // Email is kept; Phone/Website/LinkedIn removed
 
     @State private var notes: String = ""
@@ -22,58 +27,129 @@ struct NewConversationView: View {
     @State private var occurredAt: Date = Date()
 
     @State private var showingScanner = false
+    // Scanner results preview
+    @State private var lastScannedImage: UIImage? = nil
+    @State private var lastExtractedText: String = ""
+    @State private var lastMappedByKey: [String: String]? = nil
+    @State private var confirmCancel = false
+    @State private var showingAutofill = false
 
-    private var selected: Set<BadgeField> { Set(event.selectedBadgeFields) }
+    // Center HUD feedback (large check or X)
+    private enum CenterHUD { case saved, cancelled }
+    @State private var centerHUD: CenterHUD? = nil
 
-    private var showName: Bool { selected.contains(.name) }
-    private var showTitle: Bool { selected.contains(.title) && !selected.contains(.role) }
-    private var showRole: Bool { selected.contains(.role) || (selected.contains(.title) && selected.contains(.role)) }
-    private var showCompany: Bool { selected.contains(.company) }
-    private var showEmail: Bool { true }
-    private var showAttendeeType: Bool { selected.contains(.attendeeType) }
+    // Focus handling to dismiss keyboard when saving/cancelling
+    private enum FocusField: Hashable { case title, name, role, company, department, email, other, notes }
+    @FocusState private var focusedField: FocusField?
+
+    // Conversations always show all fields now
     @State private var attendeeType: AttendeeType = .attendee
+
+    // Events list and selection
+    @Query(sort: \Event.startDate, order: .reverse) private var events: [Event]
+    @State private var selectedEvent: Event? = nil
+    @State private var eventManuallySelected: Bool = false
 
     var body: some View {
         NavigationStack {
-            Form {
+            ScrollViewReader { proxy in
+                Form {
+                // Event selection & Scan action
                 Section {
-                    Button {
-                        showingScanner = true
-                    } label: {
-                        HStack {
-                            Image(systemName: "camera.viewfinder")
-                            Text("Scan Badge with Camera")
+                    EmptyView()
+                } header: {
+                    HStack {
+                        Spacer()
+                        Button {
+                            showingScanner = true
+                        } label: {
+                            HStack {
+                                Image(systemName: "camera.viewfinder")
+                                Text("Scan Badge")
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+                        Spacer()
+                    }
+                    .padding(.top, 4)
+                }
+                .id("top")
+
+                if !events.isEmpty {
+                    Section("Event") {
+                        Picker("Event", selection: Binding<Event?>(
+                            get: { selectedEvent ?? event },
+                            set: { newValue in
+                                selectedEvent = newValue
+                                eventManuallySelected = true
+                            }
+                        )) {
+                            ForEach(events) { ev in
+                                Text(ev.name).tag(ev as Event?)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                    }
+                }
+
+                if !lastExtractedText.isEmpty || lastScannedImage != nil {
+                    Section("Scan Result") {
+                        HStack(alignment: .top, spacing: 12) {
+                            if let img = lastScannedImage {
+                                Image(uiImage: img)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 140)
+                                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                            .strokeBorder(Color.secondary.opacity(0.2))
+                                    )
+                            }
+                            ScrollView {
+                                Text(lastExtractedText)
+                                    .font(.footnote)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            .frame(minHeight: 100)
+                        }
+                        if lastMappedByKey != nil {
+                            Button {
+                                showingAutofill = true
+                            } label: {
+                                Label("Autofill…", systemImage: "wand.and.stars")
+                            }
+                            .buttonStyle(.bordered)
                         }
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
                 }
 
                 Section("Details") {
-                    if showName {
-                        TextField("Name", text: $fullName)
-                    }
-                    if showTitle {
-                        TextField("Title", text: $roleOrTitle)
-                    }
-                    if showRole {
-                        TextField("Role", text: $roleOrTitle)
-                    }
-                    if showCompany {
-                        TextField("Company", text: $company)
-                    }
-                    TextField("Email", text: $email)
+                    TextField("Title", text: $titleText)
+                        .focused($focusedField, equals: .title)
+                    TextField("Name", text: $nameText)
+                        .focused($focusedField, equals: .name)
+                    TextField("Role", text: $roleText)
+                        .focused($focusedField, equals: .role)
+                    TextField("Company", text: $companyText)
+                        .focused($focusedField, equals: .company)
+                    TextField("Department", text: $departmentText)
+                        .focused($focusedField, equals: .department)
+                    TextField("Email", text: $emailText)
                         .keyboardType(.emailAddress)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled(true)
-                    if showAttendeeType {
-                        AttendeeTypePickerView(selection: $attendeeType)
-                    }
+                        .focused($focusedField, equals: .email)
+                    TextField("Other", text: $otherText)
+                        .focused($focusedField, equals: .other)
+                    AttendeeTypePickerView(selection: $attendeeType)
                 }
 
                 Section("Notes") {
                     TextField("What did you discuss?", text: $notes, axis: .vertical)
                         .lineLimit(5, reservesSpace: true)
+                        .focused($focusedField, equals: .notes)
                 }
 
                 Section("When") {
@@ -81,25 +157,82 @@ struct NewConversationView: View {
                 }
 
                 // Attendee type is shown as the chip picker in Details above when enabled
-            }
-            .navigationTitle("New Conversation")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { save() }.disabled(!canSave)
+                }
+                .navigationTitle("New Conversation")
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel", role: .destructive) { confirmCancel = true }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Save") { save(proxy: proxy) }.disabled(!canSave)
+                    }
+                }
+                .alert("Are you sure?", isPresented: $confirmCancel) {
+                    Button("Discard", role: .destructive) {
+                        if dismissOnSave {
+                            dismiss()
+                        } else {
+                            resetForm()
+                            endEditingAndScrollTop(proxy)
+                            showHUD(.cancelled)
+                        }
+                    }
+                    Button("Cancel", role: .cancel) { }
+                } message: {
+                    Text("This will clear the form and discard any entered information.")
+                }
+                .overlay { centerHUDView }
+                .fullScreenCover(isPresented: $showingScanner) {
+                    ScanBadgeView(event: selectedEvent ?? event, onComplete: { image, raw in
+                        lastScannedImage = image
+                        lastExtractedText = raw
+                        let parsed = TextParsingService.parse(from: raw)
+                        apply(parsed)
+                        showingScanner = false
+                    }, onCancel: {
+                        showingScanner = false
+                    }, onMapped: { mapped in
+                        lastMappedByKey = mapped
+                    })
+                    .ignoresSafeArea()
+                }
+                .fullScreenCover(isPresented: $showingAutofill) {
+                    if let mapped = lastMappedByKey {
+                        AutofillReviewView(event: selectedEvent ?? event,
+                                           originalImage: lastScannedImage,
+                                           rawText: lastExtractedText,
+                                           mappedByKey: mapped,
+                                           onApply: { dict in
+                                               // apply reviewed values to form
+                                               for (field, value) in dict {
+                                                   let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                                                   guard !trimmed.isEmpty else { continue }
+                                                   switch field {
+                                                   case .title: titleText = trimmed
+                                                   case .name: nameText = trimmed
+                                                   case .role: roleText = trimmed
+                                                   case .company: companyText = trimmed
+                                                   case .department: departmentText = trimmed
+                                                   case .email: emailText = trimmed
+                                                   case .other: otherText = trimmed
+                                                   }
+                                               }
+                                               showingAutofill = false
+                                           }, onCancel: {
+                                               showingAutofill = false
+                                           })
+                        .ignoresSafeArea()
+                    }
                 }
             }
-            .sheet(isPresented: $showingScanner) {
-                ScanBadgeView { raw in
-                    let parsed = TextParsingService.parse(from: raw)
-                    apply(parsed)
-                    showingScanner = false
-                } onCancel: {
-                    showingScanner = false
-                }
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-            }
+        }
+        .onAppear {
+            // Initialize selected event and auto-pick by date if appropriate
+            selectedEvent = event
+            autoSelectEventIfNeeded(for: occurredAt)
+        }
+        .onChange(of: occurredAt) { _, newValue in
+            if !eventManuallySelected { autoSelectEventIfNeeded(for: newValue) }
         }
     }
 
@@ -109,35 +242,36 @@ struct NewConversationView: View {
         self.dismissOnSave = dismissOnSave
     }
 
-    private var canSave: Bool {
-        if showName { !fullName.trimmingCharacters(in: .whitespaces).isEmpty } else { true }
-    }
+    private var canSave: Bool { true }
 
     private func apply(_ parsed: ParsedAttendee) {
-        if showName, fullName.isEmpty { fullName = parsed.fullName ?? fullName }
-        if (showTitle || showRole), roleOrTitle.isEmpty { roleOrTitle = parsed.title ?? roleOrTitle }
-        if showCompany, company.isEmpty { company = parsed.company ?? company }
-        if email.isEmpty { email = parsed.email ?? email }
+        if nameText.isEmpty { nameText = parsed.fullName ?? nameText }
+        if titleText.isEmpty { titleText = parsed.title ?? titleText }
+        if roleText.isEmpty { roleText = parsed.title ?? roleText }
+        if companyText.isEmpty { companyText = parsed.company ?? companyText }
+        if emailText.isEmpty { emailText = parsed.email ?? emailText }
     }
 
-    private func save() {
+    private func save(proxy: ScrollViewProxy) {
         // Try to dedupe by email or phone
-        let existing = DedupeService.findExistingAttendee(email: email.isEmpty ? nil : email, phone: nil, context: context)
+        let existing = DedupeService.findExistingAttendee(email: emailText.isEmpty ? nil : emailText, phone: nil, context: context)
         let attendee: Attendee = existing ?? {
             let a = Attendee()
             context.insert(a)
             return a
         }()
 
-        if showName { attendee.fullName = fullName.trimmingCharacters(in: .whitespacesAndNewlines) }
-        if showTitle || showRole { attendee.title = roleOrTitle.trimmingCharacters(in: .whitespacesAndNewlines) }
-        if showCompany { attendee.company = company.trimmingCharacters(in: .whitespacesAndNewlines) }
-        if showEmail { attendee.email = email.trimmingCharacters(in: .whitespacesAndNewlines) }
-        // Phone/Website/LinkedIn removed from capture
+        attendee.title = titleText.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        attendee.fullName = nameText.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        attendee.role = roleText.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        attendee.company = companyText.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        attendee.department = departmentText.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        attendee.email = emailText.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        attendee.other = otherText.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
 
-        attendee.attendeeType = showAttendeeType ? attendeeType.rawValue : attendee.attendeeType
+        attendee.attendeeType = attendeeType.rawValue
 
-        let convo = Conversation(event: event, attendee: attendee, notes: notes, followUp: followUp)
+        let convo = Conversation(event: selectedEvent ?? event, attendee: attendee, notes: notes, followUp: followUp)
         convo.createdAt = occurredAt
         context.insert(convo)
 
@@ -146,19 +280,79 @@ struct NewConversationView: View {
             dismiss()
         } else {
             resetForm()
+            endEditingAndScrollTop(proxy)
+            showHUD(.saved)
         }
     }
 
     private func resetForm() {
-        fullName = ""
-        roleOrTitle = ""
-        company = ""
-        email = ""
+        titleText = ""
+        nameText = ""
+        roleText = ""
+        companyText = ""
+        departmentText = ""
+        emailText = ""
+        otherText = ""
         notes = ""
         followUp = false
         occurredAt = Date()
         attendeeType = .attendee
         showingScanner = false
+        lastScannedImage = nil
+        lastExtractedText = ""
+    }
+
+    private func endEditingAndScrollTop(_ proxy: ScrollViewProxy) {
+        focusedField = nil
+        withAnimation { proxy.scrollTo("top", anchor: .top) }
+    }
+
+    @ViewBuilder
+    private var centerHUDView: some View {
+        if let centerHUD, !dismissOnSave {
+            ZStack {
+                Color.clear.contentShape(Rectangle()).ignoresSafeArea()
+                VStack(spacing: 12) {
+                    Image(systemName: centerHUD == .saved ? "checkmark.circle.fill" : "xmark.circle.fill")
+                        .font(.system(size: 56, weight: .semibold))
+                        .foregroundStyle(centerHUD == .saved ? .green : .red)
+                    Text(centerHUD == .saved ? "Conversation Saved" : "Cancelled")
+                        .font(.headline)
+                        .bold()
+                }
+                .padding(24)
+                .background(.ultraThinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            }
+            .transition(.opacity.combined(with: .scale))
+            .onTapGesture { hideHUD() }
+        }
+    }
+
+    private func showHUD(_ kind: CenterHUD) {
+        withAnimation { centerHUD = kind }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+            hideHUD()
+        }
+    }
+
+    private func hideHUD() {
+        withAnimation { centerHUD = nil }
+    }
+
+    private func autoSelectEventIfNeeded(for date: Date) {
+        // Prefer event whose date range contains the occurredAt date
+        if let match = events.first(where: { eventContainsDate($0, date: date) }) {
+            selectedEvent = match
+        }
+    }
+
+    private func eventContainsDate(_ ev: Event, date: Date) -> Bool {
+        if let end = ev.endDate {
+            return ev.startDate <= date && date <= end
+        } else {
+            return ev.startDate <= date
+        }
     }
 }
 
